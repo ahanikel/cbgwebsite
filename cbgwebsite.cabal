@@ -1,0 +1,36 @@
+Name:           cbgwebsite
+Version:        0.1.0
+
+Author:         Axel Hanikel <ahanikel@gmail.com>
+Copyright:      (c) Axel Hanikel 2015
+Homepage:       https://github.com/ahanikel/cbgwebsite
+Bug-Reports:    https://github.com/ahanikel/cbgwebsite/issues
+Synopsis:       The Come Back Glöbb Web Site
+Cabal-Version:  >= 1.16
+Build-Type:     Simple
+Description:    The Come Back Glöbb Web Site
+
+Executable CBGWebSite
+  Main-Is: Main.hs
+  Default-Language: Haskell2010
+  Build-Depends: base >= 4.3 && < 4.9
+               , text
+               , yesod
+               , yesod-auth
+               , yesod-static
+               , shakespeare
+               , http-conduit
+               , pandoc
+
+test-suite test
+  Default-Language: Haskell2010
+  hs-source-dirs: test
+  main-is: main.hs
+  type: exitcode-stdio-1.0
+  build-depends: base
+               , cbgwebsite
+  ghc-options: -O2
+
+source-repository head
+  type:     git
+  location: https://github.com/haskell/cbgwebsite

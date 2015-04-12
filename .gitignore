@@ -1,0 +1,8 @@
+*.hi
+*.o
+*.core
+CBGWebSite
+.cabal-sandbox
+dist
+cabal.sandbox.config
+client_session_key.aes

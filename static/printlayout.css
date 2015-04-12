@@ -1,0 +1,79 @@
+@page {
+    size: landscape;
+    orphans: 3;
+    widows: 3;
+}
+
+html {
+    margin: 0;
+    padding: 0;
+    font-family: arial, helvetica, sans-serif;
+    font-size: 11pt;
+    text-align: justify;
+}
+
+#header-region, #header, #footer, #sidebar-left, img {
+    display: none;
+}
+
+.registration {
+    clear: both;
+    page-break-after: always;
+}
+
+.address {
+    font-size: 12pt;
+    margin-bottom: 5ex;
+    float: left;
+    width: 40%;
+}
+
+.childdir {
+    float: left;
+    width: 20%;
+}
+
+.zeit {
+    float: left;
+    font-size: 24pt;
+    text-align: right;
+    width: 20%;
+}
+
+.remarks {
+    clear: both;
+}
+
+.children {
+    clear: both;
+}
+
+.child > p {
+    font-weight: bold;
+    float: left;
+    padding: 1em;
+}
+
+.child {
+    padding-bottom: 50px;
+    border-bottom: 1px solid black;
+    clear: both;
+    page-break-inside: avoid;
+}
+
+.childpos {
+    width: 35%;
+    float: left;
+    clear: both;
+    margin-left: 5%;
+    margin-right: 5%;
+}
+
+.childneg {
+    width: 35%;
+    float: left;
+    margin-left: 5%;
+    margin-right: 5%;
+}
+
+/* vim:set ts=4 sw=4 ai et: */

@@ -1,0 +1,159 @@
+html {
+    margin: 0;
+    padding: 0;
+    font-family: arial, helvetica, sans-serif;
+    font-size: 11pt;
+    text-align: justify;
+}
+
+.prev, .next {
+  font-size: xx-large;
+}
+
+#send {
+  font-size: large;
+}
+
+.twobuttons {
+    height: 50px;
+    vertical-align: middle;
+    padding-bottom: 3ex;
+}
+
+.twobuttons > button.alignright {
+    float: right;
+}
+
+#intro h1 {
+    padding-bottom: 3ex;
+}
+
+.invalidMessage {
+	color: red;
+  visibility: hidden;
+} 
+
+.show {
+  visibility: visible;
+}
+
+table tr {
+	vertical-align: top;
+}
+
+tbody, .node {
+	border: 0px;
+}
+
+#layout-children td {
+	padding-right: 20px;
+}
+
+input {
+	width: 400px;
+}
+
+input[type="radio"] {
+	width: 10px;
+}
+
+textarea {
+	width: 100%;
+}
+
+.childsex, .childpos, .childneg, #uuid {
+	visibility: hidden;
+	display: none;
+}
+
+.childname {
+	width: 70%;
+}
+
+.childage {
+	width: 30%;
+}
+
+.editable.read-only input, .editable.read-only textarea, .editable.readonly label, .editable.readonly span {
+    background-color: lightgrey;
+    color: lightgrey;
+}
+
+.add:disabled, #del:disabled {
+  opacity: .5;
+  -ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=50)"; /* -ms-ugly-yuck-yuck-yuck */
+	filter: alpha(opacity=50);
+}
+
+#list-children tbody tr:hover {
+	background-color: yellow;
+	cursor: pointer;
+}
+
+#list-children:disabled tbody tr:hover {
+  background-color: lightgrey;
+  cursor: auto;
+  color: lightgrey;
+}
+
+#list-children tbody tr.selected, #list-children tbody tr.selected:hover {
+	background-color: blue;
+	cursor: pointer;
+}
+
+legend, th {
+  font-size: large;
+  font-weight: bold;
+}
+
+label {
+  font-size: medium;
+  font-weight: bold;
+}
+
+.add, #del {
+  font-size: medium;
+  font-weight: bold;
+  vertical-align: middle;
+}
+
+h1 {
+  font-size: xx-large;
+}
+
+.sidebar img {
+  margin-left: -150px;
+}
+
+.okbutton {
+  color: red;
+  font-size: medium;
+}
+
+.okbutton:disabled {
+  color: rgb(255,190,190);
+}
+
+#details p {
+}
+
+#details p em {
+  font-weight: bold;
+  font-variant: normal;
+}
+
+.buttonlayout tr {
+  height: 30px;
+}
+
+button {
+  cursor: pointer;
+}
+
+#soldout p {
+  margin-top: 4ex;
+}
+
+#soldout h1 {
+  margin-bottom: 4ex;
+}
