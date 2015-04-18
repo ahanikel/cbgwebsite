@@ -14,13 +14,16 @@ Executable CBGWebSite
   Main-Is: Main.hs
   Default-Language: Haskell2010
   Build-Depends: base
+               , directory
                , text
                , yesod
                , yesod-auth
                , yesod-static
+               , wai
                , shakespeare
                , http-conduit
                , pandoc
+               , filepath
 
 test-suite test
   Default-Language: Haskell2010

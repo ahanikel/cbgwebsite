@@ -13,11 +13,17 @@ import Text.Hamlet
 import Yesod.Auth
 import Yesod.Auth.BrowserId
 import Network.HTTP.Conduit (Manager, conduitManagerSettings, newManager)
+import Network.Wai (pathInfo)
 
 -- other imports
 import Control.Concurrent (MVar, newMVar)
-import Data.Text (Text, unpack)
+import Data.Text (Text, unpack, pack)
 import Text.Pandoc (readMarkdown, writeHtml)
+import System.Directory (getDirectoryContents, doesDirectoryExist)
+import Control.Monad (filterM)
+import Data.List (intercalate)
+import System.FilePath ((</>), normalise, splitDirectories)
+import Control.Exception (catch, SomeException)
 
 staticFiles "static"
 
@@ -37,7 +43,7 @@ mkYesod "CBGWebSite" [parseRoutes|
 
 instance Yesod CBGWebSite where
     defaultLayout                    = cbgLayout
-    approot                          = ApprootStatic "http://localhost:8080"
+    approot                          = ApprootStatic ""
     -- isAuthorized route isWriteRequest? = ...
     isAuthorized RootR         False = return Authorized
     isAuthorized FavR          False = return Authorized
@@ -63,8 +69,13 @@ instance YesodAuth CBGWebSite where
     maybeAuthId                      = lookupSession "_ID"
 
 cbgLayout :: Widget -> Handler Html
-cbgLayout widget = do pageContent <- widgetToPageContent widget
-                      maybeAuthId <- maybeAuthId
+cbgLayout widget = do pageContent  <- widgetToPageContent widget
+                      maybeAuthId  <- maybeAuthId
+                      req          <- getRequest
+                      let path     =  map unpack $ pathInfo $ reqWaiRequest req
+                      let naviRoot =  intercalate "/" path
+                      naviEntries  <- liftIO $ getContentNavi naviRoot
+                      navi         <- widgetToPageContent $ contentNavi naviRoot
                       withUrlRenderer $(hamletFile "layout.hamlet")
 
 withJQuery :: Widget -> Widget
@@ -87,8 +98,8 @@ withAngularController controller widget = do
         <script src=@{StaticR controllers_js}>
     |]
 
-getRootR :: Handler Html
-getRootR = defaultLayout [whamlet|Willkommen beim Come Back Glöbb|]
+getRootR :: Handler ()
+getRootR = redirect ("/content/welcome" :: String)
 
 getFavR :: Handler ()
 getFavR = sendFile "image/png" "static/cbg-favicon.png"
@@ -105,8 +116,45 @@ instance PathMultiPiece ContentPath where
 
 getContentR :: ContentPath -> Handler Html
 getContentR (ContentPath pieces) = defaultLayout $ do
-    let sourceFileName = "content/" ++ concat (map unpack pieces) ++ "/text.md"
+    let sourceFileName = "content/" ++ intercalate "/" (map unpack pieces) ++ "/text.md"
     markdownSource <- liftIO $ readFile sourceFileName
     let html = writeHtml def $ readMarkdown def markdownSource
     toWidget html
 
+data Node = Node { ct_name  :: String
+                 , ct_title :: String
+                 , ct_url   :: String
+                 }
+    deriving (Read, Show, Eq)
+
+getNode :: FilePath -> IO Node
+getNode path = do let normalisedPath = normalise path
+                      splitPath      = splitDirectories normalisedPath
+                      name           = last splitPath
+                      url            = "/" ++ normalisedPath
+                  title <- catch (readFile $ normalisedPath </> "title")
+                                 ((\_ -> return "") :: SomeException -> IO String)
+                  return $ Node name title url
+
+getContentNavi :: FilePath -> IO [Node]
+getContentNavi root = getDirectoryContents root >>= filterM acceptable >>= mapM toNode
+    where acceptable item = do isDir <- doesDirectoryExist $ root </> item
+                               let noDot = item `notElem` [".", ".."]
+                               return $ isDir && noDot
+          toNode item = getNode $ root </> item
+
+contentNavi :: FilePath -> Widget
+contentNavi path = do current  <- liftIO $ getNode path
+                      parent   <- liftIO $ getNode (path ++ "/..")
+                      siblings <- liftIO $ getContentNavi $ tail $ ct_url parent
+                      children <- liftIO $ getContentNavi path
+                      [whamlet|
+                          $forall entry <- siblings
+                              <li .menu-123>
+                                  <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
+                              $if entry == current
+                                  <ul>
+                                  $forall child <- children
+                                      <li .menu-123>
+                                          <a href=#{ct_url child} title=#{ct_title child}>#{ct_title child}
+                      |]

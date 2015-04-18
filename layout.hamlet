@@ -5,8 +5,6 @@ $doctype 5
         <title>#{pageTitle pageContent}
         <link type=text/css rel=stylesheet media=screen href=@{StaticR defaults_css}>
         <link type=text/css rel=stylesheet media=screen href=@{StaticR garland_css}>
-        <link type=text/css rel=stylesheet media=screen href=@{StaticR santi_css}>
-        <link type=text/css rel=stylesheet media=print  href=@{StaticR printlayout_css}>
         ^{pageHead pageContent}
     <body .sidebar-left>
         <div #header-region .clear-block>
@@ -15,19 +13,13 @@ $doctype 5
                 <div #header>
                     <div #logo-floater>
                         <h1>
-                            <a href="/">
+                            <a href=@{RootR}>
                                 <img #logo src=@{StaticR garland_logo_png} alt="">
                     <ul .links .primary-links>
-                        <li .menu-122 .first>
-                            <a href=@{RootR} title=Anmeldungen>Anmeldungen
-                        <li .menu-122 .first>
-                            <a href="/" title="Willkommen beim Come Back Glöbb Allschwil">Willkommen
-                        <li .menu-115 .active-trail>
-                            <a href="/aktuelles" title="Aktuelles rund um den Glöbb">Aktuelles
-                        <li .menu-123>
-                            <a href="/projekte" title="Projekte">Projekte
-                        <li .menu-170>
-                            <a href="/archiv" title="Archiv">Archiv
+                        ^{pageBody navi}
+                        $forall entry <- naviEntries
+                            <li .menu-123>
+                                <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
                         $maybe userid <- maybeAuthId
                             <li .menu-124>
                                 <a href="/mitglieder" title="Mitglieder">Mitglieder
@@ -35,22 +27,23 @@ $doctype 5
                                 <a href=@{AuthR LogoutR} title="Logout">Logout #{userid}
                         $nothing
                             <li .menu-170 .last>
-                                <a href=@{AuthR LoginR} title="Login">Login
+                                <a href=@{AuthR LoginR} title="Mitglieder">Mitglieder
                 <div #sidebar-left .sidebar>
                     <div #block-menu-primary-links .clear-block .block .block-menu>
-                        <h2>Come Back Glöbb
+                        <h1>Come Back Glöbb
                         <div .content>
                             <ul .menu>
-                                <li .leaf .first .active-trail>
-                                    <a href=/ title="Willkommen beim Come Back Glöbb Allschwil" .active>Willkommen
-                                <li .collapsed>
-                                    <a href=/aktuelles title="Aktuelles rund um den Glöbb">Aktuelles
-                                <li .leaf>
-                                    <a href=/projekte title="Projekte">Projekte
-                                <li .leaf>
-                                    <a href=/archiv title="Archiv">Archiv
-                                <li .collapsed .last>
-                                    <a href=/mitglieder title="Mitglieder">Mitglieder
+                                $forall entry <- naviEntries
+                                    <li .leaf>
+                                        <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
+                                $maybe userid <- maybeAuthId
+                                    <li .leaf>
+                                        <a href=/mitglieder title="Mitglieder">Mitglieder
+                                    <li .leaf .last>
+                                        <a href=@{AuthR LogoutR} title="Logout">Logout #{userid}
+                                $nothing
+                                    <li .leaf .last>
+                                        <a href=@{AuthR LoginR} title="Mitglieder">Mitglieder
                 <div #center>
                     <div #squeeze>
                         <div .right-corner>
