@@ -137,7 +137,9 @@ getNode path = do let normalisedPath = normalise path
                   return $ Node name title url
 
 getContentNavi :: FilePath -> IO [Node]
-getContentNavi root = getDirectoryContents root >>= filterM acceptable >>= mapM toNode
+getContentNavi root =
+    catch (getDirectoryContents root >>= filterM acceptable >>= mapM toNode)
+          ((\_ -> return []) :: SomeException -> IO [Node])
     where acceptable item = do isDir <- doesDirectoryExist $ root </> item
                                let noDot = item `notElem` [".", ".."]
                                return $ isDir && noDot
