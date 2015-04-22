@@ -14,7 +14,8 @@ import Text.Hamlet
 import Yesod.Auth
 import Yesod.Auth.BrowserId
 import Network.HTTP.Conduit (Manager, conduitManagerSettings, newManager)
-import Network.Wai (pathInfo)
+import Network.Wai (pathInfo, responseLBS)
+import Network.HTTP.Types (status200)
 
 -- other imports
 import Control.Concurrent (MVar, newMVar)
@@ -25,7 +26,7 @@ import Control.Monad (filterM)
 import Data.List (intercalate)
 import System.FilePath ((</>), normalise, splitDirectories, dropFileName)
 import Control.Exception (catch, SomeException)
-import Control.Monad (forM)
+import Data.Aeson (encode, object)
 
 staticFiles "static"
 
@@ -35,28 +36,35 @@ data CBGWebSite = CBGWebSite { getStatic   :: Static
                              }
 
 mkYesod "CBGWebSite" [parseRoutes|
-    /                     RootR           GET
-    /favicon.ico          FavR            GET
-    /static               StaticR         Static          getStatic
-    /auth                 AuthR           Auth            getAuth
-    /mitglieder           MembersR        GET
-    /content/+ContentPath ContentR        GET
+    /                            RootR                 GET
+    /favicon.ico                 FavR                  GET
+    /static                      StaticR               Static          getStatic
+    /auth                        AuthR                 Auth            getAuth
+    /mitglieder                  MembersR              GET
+    /content/+ContentPath        ContentR              GET
+    /mitglieder/kalender         MemberCalendarR       GET
+    /mitglieder/kalender.json    MemberCalendarJsonR   GET
+    /mitglieder/liste            MemberListR           GET
+    /mitglieder/liste.json       MemberListJsonR       GET
 |]
 
 instance Yesod CBGWebSite where
-    defaultLayout                    = cbgLayout
-    approot                          = ApprootStatic ""
+    defaultLayout                          = cbgLayout
+    approot                                = ApprootStatic ""
     -- isAuthorized route isWriteRequest? = ...
-    isAuthorized RootR         False = return Authorized
-    isAuthorized FavR          False = return Authorized
-    isAuthorized (AuthR _)     _     = return Authorized
-    isAuthorized MembersR      False = do
-        authUser <- maybeAuthId
-        case authUser of
-            Just userName | userName `has` Read `On` Members -> return Authorized
-            _                                                -> return $ Unauthorized ""
-    isAuthorized (ContentR _)  False = return Authorized
-    isAuthorized _             _     = return $ Unauthorized ""
+    isAuthorized RootR               False = return Authorized
+    isAuthorized FavR                False = return Authorized
+    isAuthorized (AuthR _)           _     = return Authorized
+    isAuthorized MemberCalendarJsonR False = return Authorized
+    isAuthorized MemberListR         False = return Authorized
+    isAuthorized MemberListJsonR     False = return Authorized
+    isAuthorized MembersR            False = do
+      authUser <- maybeAuthId
+      case authUser of
+        Just userName | userName `has` Read `On` Members -> return Authorized
+        _                                                -> return $ Unauthorized ""
+    isAuthorized (ContentR _)  False       = return Authorized
+    isAuthorized _             _           = return $ Unauthorized ""
 
 instance RenderMessage CBGWebSite FormMessage where
     renderMessage _ _ = defaultFormMessage
@@ -64,8 +72,8 @@ instance RenderMessage CBGWebSite FormMessage where
 instance YesodAuth CBGWebSite where
     type AuthId CBGWebSite           = Text
     getAuthId                        = return . Just . credsIdent
-    loginDest _                      = RootR
-    logoutDest _                     = RootR
+    loginDest _                      = MembersR
+    logoutDest _                     = MembersR
     authPlugins _                    = [ authBrowserId def ]
     authHttpManager                  = httpManager
     maybeAuthId                      = lookupSession "_ID"
@@ -91,6 +99,7 @@ withJQuery widget = do
 
 withAngularController :: String -> Widget -> Widget
 withAngularController controller widget = do
+    let controllerjs = "/static/" ++ controller ++ ".js"
     [whamlet|
         <div ng-app=cbgApp>
             <div ng-controller=#{controller}>
@@ -98,7 +107,7 @@ withAngularController controller widget = do
     |]
     toWidgetHead [hamlet|
         <script src=//ajax.googleapis.com/ajax/libs/angularjs/1.2.24/angular.min.js>
-        <script src=@{StaticR controllers_js}>
+        <script src=#{controllerjs}>
     |]
 
 getRootR :: Handler ()
@@ -188,3 +197,46 @@ auditTrail path = do currentNode <- liftIO $ getNode path
     where encodeTrail current = [whamlet|<li .menu-123 .collapsed>
                                              <a href=#{ct_url current} title=#{ct_title current}>#{ct_title current}
                                 |]
+getMemberCalendarR :: Handler Html
+getMemberCalendarR = defaultLayout $ withAngularController "MemberCalendarController" $ do
+    [whamlet|
+        <table>
+            <tr>
+                <th ng-repeat="col in ['zeit', 'name', 'vorname', 'strasse', 'ort']">{{col}}
+            <tr ng-repeat="item in memberCalendarItems">
+                <td>{{item.zeit}}
+                <td>{{item.name}}
+                <td>{{item.vorname}}
+                <td>{{item.strasse}}
+                <td>{{item.ort}}
+    |]
+
+getMemberCalendarJsonR :: Handler ()
+getMemberCalendarJsonR = sendWaiResponse $ responseLBS
+                             status200
+                             [("Content-Type", "application/json")]
+                             "{ 'hello': 'world' }"
+
+getMemberListR :: Handler Html
+getMemberListR = defaultLayout $ withAngularController "MemberListController" $ do
+    [whamlet|
+        <table>
+            <tr>
+                <th ng-repeat="col in ['vorname', 'name', 'strasse', 'ort']">{{col}}
+            <tr ng-repeat="item in memberListItems">
+                <td>{{item.vorname}}
+                <td>{{item.name}}
+                <td>{{item.strasse}}
+                <td>{{item.ort}}
+    |]
+
+getMemberListJsonR :: Handler ()
+getMemberListJsonR = sendWaiResponse $ responseLBS
+                             status200
+                             [("Content-Type", "application/json")]
+                             $ encode [ object [ "name"     .= pack "Meier"
+                                               , "vorname"  .= pack "Fritz"
+                                               , "strasse"  .= pack "Musterweg 23"
+                                               , "ort"      .= pack "9999 Testheim"
+                                               ]
+                                      ]

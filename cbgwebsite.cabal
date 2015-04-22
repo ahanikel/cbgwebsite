@@ -24,6 +24,8 @@ Executable CBGWebSite
                , http-conduit
                , pandoc
                , filepath
+               , http-types
+               , aeson
 
 test-suite test
   Default-Language: Haskell2010
