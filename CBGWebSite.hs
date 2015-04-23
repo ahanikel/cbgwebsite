@@ -22,7 +22,7 @@ import Text.Pandoc (readMarkdown, writeHtml)
 import System.Directory (getDirectoryContents, doesDirectoryExist)
 import Control.Monad (filterM)
 import Data.List (intercalate)
-import System.FilePath ((</>), normalise, splitDirectories)
+import System.FilePath ((</>), normalise, splitDirectories, dropFileName)
 import Control.Exception (catch, SomeException)
 
 staticFiles "static"
@@ -147,16 +147,19 @@ getContentNavi root =
 
 contentNavi :: FilePath -> Widget
 contentNavi path = do current  <- liftIO $ getNode path
-                      parent   <- liftIO $ getNode (path ++ "/..")
+                      parent   <- liftIO $ getNode (dropFileName path)
                       siblings <- liftIO $ getContentNavi $ tail $ ct_url parent
                       children <- liftIO $ getContentNavi path
                       [whamlet|
                           $forall entry <- siblings
-                              <li .menu-123>
-                                  <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
                               $if entry == current
-                                  <ul>
-                                  $forall child <- children
-                                      <li .menu-123>
-                                          <a href=#{ct_url child} title=#{ct_title child}>#{ct_title child}
+                                  <li .menu-123 .expanded>
+                                      <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
+                                      <ul .menu>
+                                          $forall child <- children
+                                              <li .menu-123>
+                                                  <a href=#{ct_url child} title=#{ct_title child}>#{ct_title child}
+                              $else
+                                  <li .menu-123 .collapsed>
+                                      <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
                       |]

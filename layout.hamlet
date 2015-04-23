@@ -16,10 +16,6 @@ $doctype 5
                             <a href=@{RootR}>
                                 <img #logo src=@{StaticR garland_logo_png} alt="">
                     <ul .links .primary-links>
-                        ^{pageBody navi}
-                        $forall entry <- naviEntries
-                            <li .menu-123>
-                                <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
                         $maybe userid <- maybeAuthId
                             <li .menu-124>
                                 <a href="/mitglieder" title="Mitglieder">Mitglieder
@@ -33,9 +29,7 @@ $doctype 5
                         <h1>Come Back Glöbb
                         <div .content>
                             <ul .menu>
-                                $forall entry <- naviEntries
-                                    <li .leaf>
-                                        <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
+                                ^{pageBody navi}
                                 $maybe userid <- maybeAuthId
                                     <li .leaf>
                                         <a href=/mitglieder title="Mitglieder">Mitglieder
