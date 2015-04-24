@@ -16,14 +16,10 @@ $doctype 5
                             <a href=@{RootR}>
                                 <img #logo src=@{StaticR garland_logo_png} alt="">
                     <ul .links .primary-links>
+                        ^{pageBody trail}
                         $maybe userid <- maybeAuthId
-                            <li .menu-124>
-                                <a href="/mitglieder" title="Mitglieder">Mitglieder
                             <li .menu-170 .last>
                                 <a href=@{AuthR LogoutR} title="Logout">Logout #{userid}
-                        $nothing
-                            <li .menu-170 .last>
-                                <a href=@{AuthR LoginR} title="Mitglieder">Mitglieder
                 <div #sidebar-left .sidebar>
                     <div #block-menu-primary-links .clear-block .block .block-menu>
                         <h1>Come Back Glöbb

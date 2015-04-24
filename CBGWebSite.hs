@@ -1,6 +1,7 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings, MultiParamTypeClasses, ViewPatterns #-}
 
-module CBGWebSite (CBGWebSite(..)) where
+--module CBGWebSite (CBGWebSite(..)) where
+module CBGWebSite where
 
 -- CBG
 import Privileges
@@ -24,6 +25,7 @@ import Control.Monad (filterM)
 import Data.List (intercalate)
 import System.FilePath ((</>), normalise, splitDirectories, dropFileName)
 import Control.Exception (catch, SomeException)
+import Control.Monad (forM)
 
 staticFiles "static"
 
@@ -76,6 +78,7 @@ cbgLayout widget = do pageContent  <- widgetToPageContent widget
                       let naviRoot =  intercalate "/" path
                       naviEntries  <- liftIO $ getContentNavi naviRoot
                       navi         <- widgetToPageContent $ contentNavi naviRoot
+                      trail        <- widgetToPageContent $ auditTrail naviRoot
                       withUrlRenderer $(hamletFile "layout.hamlet")
 
 withJQuery :: Widget -> Widget
@@ -123,18 +126,32 @@ getContentR (ContentPath pieces) = defaultLayout $ do
 
 data Node = Node { ct_name  :: String
                  , ct_title :: String
-                 , ct_url   :: String
+                 , ct_url   :: FilePath
+                 , ct_trail :: [FilePath]
                  }
     deriving (Read, Show, Eq)
 
 getNode :: FilePath -> IO Node
-getNode path = do let normalisedPath = normalise path
+getNode path = do let path'          = if path == "content"
+                                       then "content/welcome"
+                                       else path
+                      normalisedPath = normalise path'
                       splitPath      = splitDirectories normalisedPath
                       name           = last splitPath
                       url            = "/" ++ normalisedPath
                   title <- catch (readFile $ normalisedPath </> "title")
                                  ((\_ -> return "") :: SomeException -> IO String)
-                  return $ Node name title url
+                  return $ Node name title url $ getTrail splitPath
+    where makeTrail :: [FilePath] -> [FilePath]
+          makeTrail ns = reverse $ foldl prepend [head ns] (tail ns)
+              where prepend nodes new = (head nodes </> new) : nodes
+          getTrail ns = if path == "content/welcome"
+                        then ["content/welcome"]
+                        else makeTrail ns
+
+
+getParentNode :: Node -> IO Node
+getParentNode = getNode . dropFileName . tail . ct_url
 
 getContentNavi :: FilePath -> IO [Node]
 getContentNavi root =
@@ -147,7 +164,7 @@ getContentNavi root =
 
 contentNavi :: FilePath -> Widget
 contentNavi path = do current  <- liftIO $ getNode path
-                      parent   <- liftIO $ getNode (dropFileName path)
+                      parent   <- liftIO $ getParentNode current
                       siblings <- liftIO $ getContentNavi $ tail $ ct_url parent
                       children <- liftIO $ getContentNavi path
                       [whamlet|
@@ -163,3 +180,11 @@ contentNavi path = do current  <- liftIO $ getNode path
                                   <li .menu-123 .collapsed>
                                       <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
                       |]
+
+auditTrail :: FilePath -> Widget
+auditTrail path = do currentNode <- liftIO $ getNode path
+                     nodes       <- liftIO $ mapM getNode $ ct_trail currentNode
+                     mapM_ encodeTrail nodes
+    where encodeTrail current = [whamlet|<li .menu-123 .collapsed>
+                                             <a href=#{ct_url current} title=#{ct_title current}>#{ct_title current}
+                                |]
