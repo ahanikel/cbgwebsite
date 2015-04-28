@@ -26,6 +26,7 @@ Executable CBGWebSite
                , filepath
                , http-types
                , aeson
+               , mtl
 
 test-suite test
   Default-Language: Haskell2010

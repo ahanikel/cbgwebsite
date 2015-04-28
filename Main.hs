@@ -1,5 +1,6 @@
 -- CBG
 import CBGWebSite
+import Repository
 
 -- Yesod
 import Yesod
