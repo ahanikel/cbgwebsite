@@ -1,25 +1,31 @@
 module Repository
-    ( Repository
+    ( Repository (..)
     , openRepository
-    , Node
+    , Node (..)
     , getNode
     , getParentNode
     , getChildNodeNames
     , getChildNode
-    , Property
+    , Property (..)
+    , getProperty
     , Value
     , URL
     , urlFromString
+    , urlToString
     , PathComponent
     , pathCompFromString
+    , isRootNode
     )
 where
 
+import Utils
 import System.Directory (getDirectoryContents, doesFileExist, doesDirectoryExist)
 import Control.Monad (filterM)
 import System.FilePath (normalise, splitDirectories, (</>))
 import Control.Monad.Error (ErrorT(..))
 import Control.Exception (catch, SomeException, IOException, try)
+import System.IO.Error (userError)
+import Data.List (intercalate)
 
 -- exported
 data Repository = Repository { root :: FilePath
@@ -31,24 +37,35 @@ openRepository :: FilePath -> Repository
 openRepository = Repository
 
 -- exported
-type URL = String
-
--- exported
-urlFromString :: String -> URL
-urlFromString = id
-
--- exported
 type PathComponent = String
 
 -- exported
-pathCompFromString :: String -> PathComponent 
+pathCompFromString :: FilePath -> PathComponent 
 pathCompFromString = id
+
+-- exported
+type URL = [PathComponent]
+
+-- exported
+urlFromString :: String -> URL
+urlFromString ""      = []
+urlFromString ('/':s) = urlFromString s
+urlFromString s       = map pathCompFromString $ splitDirectories $ normalise s
+
+-- exported
+urlToString :: URL -> String
+urlToString = ('/' :) . (intercalate "/")
 
 -- exported
 data Value = StringValue String
            | NumberValue Integer
            | BooleanValue Bool
-    deriving (Read, Show, Eq)
+    deriving (Read, Eq)
+
+instance Show Value where
+    show (StringValue s)  = s
+    show (NumberValue i)  = show i
+    show (BooleanValue b) = show b
 
 -- exported
 data Property = Property { prop_name :: String
@@ -58,7 +75,7 @@ data Property = Property { prop_name :: String
 
 -- exported
 data Node = Node { node_name        :: String
-                 , node_path        :: [PathComponent]
+                 , node_path        :: URL
                  , node_props       :: [Property]
                  , node_repo        :: Repository
                  }
@@ -75,31 +92,19 @@ readProperties path = readFiles path      >>=
           filterFiles (name, path)  = doesFileExist path
           readProperty (name, path) = readFile path >>= return . Property name . StringValue
 
--- from https://hackage.haskell.org/package/mmorph-1.0.0/docs/Control-Monad-Morph.html
-check :: IO a -> ErrorT IOException IO a
-check io = ErrorT (try io)
-
 -- exported
 getNode :: Repository -> URL -> ErrorT IOException IO Node
-getNode repo url = do let normalised = normalise url
-                          path       = splitDirectories normalised
-                          name       = last path
-                          url'       = if head normalised == '/'
-                                       then normalised
-                                       else '/' : normalised
-                          filePath   = root repo ++ url'
+getNode repo url = do let name       = case url of [] -> "/"
+                                                   _  -> last url
+                          filePath   = intercalate "/" (root repo : url)
                       props <- check (readProperties filePath)
-                      return $ Node name path props repo
+                      return $ Node name url props repo
 
 -- exported
 getParentNode :: Node -> ErrorT IOException IO Node
-getParentNode node = do let path     = init $ node_path node
-                            name     = last path
-                            url'     = '/' : foldr (</>) "" path
-                            repo     = node_repo node
-                            filePath = root repo ++ url'
-                        props <- check $ readProperties filePath
-                        return $ Node name path props repo
+getParentNode node | node_name node == "/" = fail "Root has no parent"
+getParentNode node | otherwise = do let path     = init $ node_path node
+                                    getNode (node_repo node) path
 
 -- exported
 getChildNodeNames :: Node -> ErrorT IOException IO [String]
@@ -115,7 +120,15 @@ getChildNodeNames node = do let path       = node_path node
 -- exported
 getChildNode :: Node -> String -> ErrorT IOException IO Node
 getChildNode node name = do let path      = node_path node
-                                url       = '/' : foldr (</>) "" path
-                                url'      = url </> name
+                                path'     = path ++ [name]
                                 repo      = node_repo node
-                            getNode repo url'
+                            getNode repo path'
+
+--exported
+getProperty :: Node -> String -> Maybe Property
+getProperty node name = fmap (Property name) $ lookup name props
+    where props = map (\(Property n v) -> (n, v)) $ node_props node
+
+--exported
+isRootNode :: Node -> Bool
+isRootNode n = node_path n == []

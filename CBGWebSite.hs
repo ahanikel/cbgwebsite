@@ -6,6 +6,7 @@ module CBGWebSite where
 -- CBG
 import Privileges
 import Users
+import Repository
 
 -- Yesod
 import Yesod
@@ -21,18 +22,19 @@ import Network.HTTP.Types (status200)
 import Control.Concurrent (MVar, newMVar)
 import Data.Text (Text, unpack, pack)
 import Text.Pandoc (readMarkdown, writeHtml)
-import System.Directory (getDirectoryContents, doesDirectoryExist)
 import Control.Monad (filterM)
 import Data.List (intercalate)
-import System.FilePath ((</>), normalise, splitDirectories, dropFileName)
-import Control.Exception (catch, SomeException)
+import Control.Exception (IOException)
 import Data.Aeson (encode, object)
+import Control.Monad.Error (runErrorT, ErrorT(..))
+import Data.Foldable (foldrM)
 
 staticFiles "static"
 
 data CBGWebSite = CBGWebSite { getStatic   :: Static
                              , getSem      :: MVar Bool
                              , httpManager :: Manager
+                             , repo        :: Repository
                              }
 
 mkYesod "CBGWebSite" [parseRoutes|
@@ -83,10 +85,14 @@ cbgLayout widget = do pageContent  <- widgetToPageContent widget
                       maybeAuthId  <- maybeAuthId
                       req          <- getRequest
                       let path     =  map unpack $ pathInfo $ reqWaiRequest req
-                      let naviRoot =  intercalate "/" path
-                      naviEntries  <- liftIO $ getContentNavi naviRoot
-                      navi         <- widgetToPageContent $ contentNavi naviRoot
-                      trail        <- widgetToPageContent $ auditTrail naviRoot
+                      let repoPath =  tail path
+                      app          <- getYesod
+                      eitherNode   <- liftIO $ runErrorT (getNode (repo app) repoPath)
+                      node         <- case eitherNode of
+                                          Right n -> return n
+                                          Left  m -> fail $ show m
+                      navi         <- widgetToPageContent $ navigationWidget node
+                      trail        <- widgetToPageContent $ auditTrail node
                       withUrlRenderer $(hamletFile "layout.hamlet")
 
 withJQuery :: Widget -> Widget
@@ -133,70 +139,68 @@ getContentR (ContentPath pieces) = defaultLayout $ do
     let html = writeHtml def $ readMarkdown def markdownSource
     toWidget html
 
-data Node = Node { ct_name  :: String
-                 , ct_title :: String
-                 , ct_url   :: FilePath
-                 , ct_trail :: [FilePath]
-                 }
-    deriving (Read, Show, Eq)
 
-getNode :: FilePath -> IO Node
-getNode path = do let path'          = if path == "content"
-                                       then "content/welcome"
-                                       else path
-                      normalisedPath = normalise path'
-                      splitPath      = splitDirectories normalisedPath
-                      name           = last splitPath
-                      url            = "/" ++ normalisedPath
-                  title <- catch (readFile $ normalisedPath </> "title")
-                                 ((\_ -> return "") :: SomeException -> IO String)
-                  return $ Node name title url $ getTrail splitPath
-    where makeTrail :: [FilePath] -> [FilePath]
-          makeTrail ns = reverse $ foldl prepend [head ns] (tail ns)
-              where prepend nodes new = (head nodes </> new) : nodes
-          getTrail ns = if path == "content/welcome"
-                        then ["content/welcome"]
-                        else makeTrail ns
+navigationWidget :: Node -> Widget
+navigationWidget node = do eitherNodes <- liftIO $ runErrorT $ do
+                               parent       <- getParentNode node
+                               siblingNames <- getChildNodeNames parent
+                               siblings     <- mapM (getChildNode parent) siblingNames
+                               childNames   <- getChildNodeNames node
+                               children     <- mapM (getChildNode node) childNames
+                               welcome      <- getNode (node_repo node) ["welcome"]
+                               return (parent, siblings, children, welcome)
+                           case eitherNodes of
+                               Left ioe                           -> fail $ show ioe
+                               Right (parent, siblings, children, welcome) -> [whamlet|
+                                   <li .menu-123 .expanded>
+                                       $if node_path parent == []
+                                           <a href=#{url welcome} title=#{title welcome}>#{title welcome}
+                                       $else
+                                           <a href=#{url parent} title=#{title parent}>#{title parent}
+                                       <ul .menu>
+                                           $forall entry <- siblings
+                                               $if entry == welcome
+                                               $elseif entry == node
+                                                   <li .menu-123 .expanded>
+                                                       <a href=#{url entry} title=#{title entry}>#{title entry}
+                                                       <ul .menu>
+                                                           $forall child <- children
+                                                               <li .menu-123>
+                                                                   <a href=#{url child} title=#{title child}>#{title child}
+                                               $else
+                                                   <li .menu-123 .collapsed>
+                                                       <a href=#{url entry} title=#{title entry}>#{title entry}
+                               |]
+    where url           = ("/content" ++) . urlToString . node_path
+          maybeTitleVal = fmap prop_value . flip getProperty ("title" :: String)
+          title n       = case maybeTitleVal n of
+                              Just v  -> show v
+                              Nothing -> ""
 
+auditTrail :: Node -> Widget
+auditTrail node = do eitherNodes <- liftIO $ runErrorT getTrail
+                     case eitherNodes of
+                         Left ioe    -> fail $ show (ioe :: IOException)
+                         Right nodes -> mapM_ encodeTrail nodes
+    where encodeTrail n = [whamlet|<li .menu-123 .collapsed>
+                                       <a href=#{url n} title=#{title n}>#{title n}
+                          |]
+          url           = ("/content" ++) . urlToString . node_path
+          maybeTitleVal = fmap prop_value . flip getProperty ("title" :: String)
+          title n       = case maybeTitleVal n of
+                              Just v  -> show v
+                              Nothing -> ""
+          getTrail :: ErrorT IOException IO [Node]
+          getTrail      = do nodes <- foldrM appendToNodes [node] $ node_path node
+                             let nodes' = tail nodes -- omit root node
+                             welcome <- getNode (node_repo node) (urlFromString "/welcome")
+                             let first = node_path $ head nodes'
+                             case first of ["welcome"] -> return nodes'
+                                           _           -> return (welcome : nodes')
+          appendToNodes :: PathComponent -> [Node] -> ErrorT IOException IO [Node]
+          appendToNodes _ (n : ns) = do p <- getParentNode n
+                                        return (p : n : ns)
 
-getParentNode :: Node -> IO Node
-getParentNode = getNode . dropFileName . tail . ct_url
-
-getContentNavi :: FilePath -> IO [Node]
-getContentNavi root =
-    catch (getDirectoryContents root >>= filterM acceptable >>= mapM toNode)
-          ((\_ -> return []) :: SomeException -> IO [Node])
-    where acceptable item = do isDir <- doesDirectoryExist $ root </> item
-                               let noDot = item `notElem` [".", ".."]
-                               return $ isDir && noDot
-          toNode item = getNode $ root </> item
-
-contentNavi :: FilePath -> Widget
-contentNavi path = do current  <- liftIO $ getNode path
-                      parent   <- liftIO $ getParentNode current
-                      siblings <- liftIO $ getContentNavi $ tail $ ct_url parent
-                      children <- liftIO $ getContentNavi path
-                      [whamlet|
-                          $forall entry <- siblings
-                              $if entry == current
-                                  <li .menu-123 .expanded>
-                                      <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
-                                      <ul .menu>
-                                          $forall child <- children
-                                              <li .menu-123>
-                                                  <a href=#{ct_url child} title=#{ct_title child}>#{ct_title child}
-                              $else
-                                  <li .menu-123 .collapsed>
-                                      <a href=#{ct_url entry} title=#{ct_title entry}>#{ct_title entry}
-                      |]
-
-auditTrail :: FilePath -> Widget
-auditTrail path = do currentNode <- liftIO $ getNode path
-                     nodes       <- liftIO $ mapM getNode $ ct_trail currentNode
-                     mapM_ encodeTrail nodes
-    where encodeTrail current = [whamlet|<li .menu-123 .collapsed>
-                                             <a href=#{ct_url current} title=#{ct_title current}>#{ct_title current}
-                                |]
 getMemberCalendarR :: Handler Html
 getMemberCalendarR = defaultLayout $ withAngularController "MemberCalendarController" $ do
     [whamlet|
