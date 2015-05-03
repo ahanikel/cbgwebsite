@@ -134,11 +134,18 @@ instance PathMultiPiece ContentPath where
 
 getContentR :: ContentPath -> Handler Html
 getContentR (ContentPath pieces) = defaultLayout $ do
-    let sourceFileName = "content/" ++ intercalate "/" (map unpack pieces) ++ "/text.md"
-    markdownSource <- liftIO $ readFile sourceFileName
-    let html = writeHtml def $ readMarkdown def markdownSource
-    toWidget html
-
+    app <- getYesod
+    eitherNode <- liftIO $ runErrorT $ do
+        let url = map unpack pieces
+        node <- getNode (repo app) url
+        return node
+    case eitherNode of
+        Left ioe -> fail $ show ioe
+        Right node -> do
+            let prop = case getProperty node "text.md" of
+                           Just p  -> show $ prop_value p
+                           Nothing -> ""
+            toWidget $ writeHtml def $ readMarkdown def prop
 
 navigationWidget :: Node -> Widget
 navigationWidget node = do eitherNodes <- liftIO $ runErrorT $ do
