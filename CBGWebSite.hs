@@ -26,8 +26,9 @@ import Control.Monad (filterM)
 import Data.List (intercalate)
 import Control.Exception (IOException)
 import Data.Aeson (encode, object)
-import Control.Monad.Error (runErrorT, ErrorT(..))
+import Control.Monad.Trans.Either (runEitherT, left)
 import Data.Foldable (foldrM)
+import Debug.Trace
 
 staticFiles "static"
 
@@ -80,6 +81,9 @@ instance YesodAuth CBGWebSite where
     authHttpManager                  = httpManager
     maybeAuthId                      = lookupSession "_ID"
 
+emptyWidget :: a -> Widget
+emptyWidget _ = [whamlet||]
+
 cbgLayout :: Widget -> Handler Html
 cbgLayout widget = do pageContent  <- widgetToPageContent widget
                       maybeAuthId  <- maybeAuthId
@@ -87,12 +91,9 @@ cbgLayout widget = do pageContent  <- widgetToPageContent widget
                       let path     =  map unpack $ pathInfo $ reqWaiRequest req
                       let repoPath =  tail path
                       app          <- getYesod
-                      eitherNode   <- liftIO $ runErrorT (getNode (repo app) repoPath)
-                      node         <- case eitherNode of
-                                          Right n -> return n
-                                          Left  m -> fail $ show m
-                      navi         <- widgetToPageContent $ navigationWidget node
-                      trail        <- widgetToPageContent $ auditTrail node
+                      eitherNode   <- liftIO $ runEitherT (getNode (repo app) repoPath)
+                      navi         <- widgetToPageContent $ either emptyWidget navigationWidget eitherNode
+                      trail        <- widgetToPageContent $ either emptyWidget auditTrail eitherNode
                       withUrlRenderer $(hamletFile "layout.hamlet")
 
 withJQuery :: Widget -> Widget
@@ -135,12 +136,13 @@ instance PathMultiPiece ContentPath where
 getContentR :: ContentPath -> Handler Html
 getContentR (ContentPath pieces) = defaultLayout $ do
     app <- getYesod
-    eitherNode <- liftIO $ runErrorT $ do
+    eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
         node <- getNode (repo app) url
         return node
     case eitherNode of
-        Left ioe -> fail $ show ioe
+        Left ioe -> notFound
+        Right node | node_path node == [] -> redirect ("/content/welcome" :: String)
         Right node -> do
             let prop = case getProperty node "text.md" of
                            Just p  -> show $ prop_value p
@@ -148,7 +150,7 @@ getContentR (ContentPath pieces) = defaultLayout $ do
             toWidget $ writeHtml def $ readMarkdown def prop
 
 navigationWidget :: Node -> Widget
-navigationWidget node = do eitherNodes <- liftIO $ runErrorT $ do
+navigationWidget node = do eitherNodes <- liftIO $ runEitherT $ do
                                parent       <- getParentNode node
                                siblingNames <- getChildNodeNames parent
                                siblings     <- mapM (getChildNode parent) siblingNames
@@ -157,7 +159,7 @@ navigationWidget node = do eitherNodes <- liftIO $ runErrorT $ do
                                welcome      <- getNode (node_repo node) ["welcome"]
                                return (parent, siblings, children, welcome)
                            case eitherNodes of
-                               Left ioe                           -> fail $ show ioe
+                               Left ioe                                    -> trace (show node ++ "/navigationWidget: " ++ show (ioe :: IOException)) (return ())
                                Right (parent, siblings, children, welcome) -> [whamlet|
                                    <li .menu-123 .expanded>
                                        $if node_path parent == []
@@ -185,9 +187,9 @@ navigationWidget node = do eitherNodes <- liftIO $ runErrorT $ do
                               Nothing -> ""
 
 auditTrail :: Node -> Widget
-auditTrail node = do eitherNodes <- liftIO $ runErrorT getTrail
+auditTrail node = do eitherNodes <- liftIO $ runEitherT getTrail
                      case eitherNodes of
-                         Left ioe    -> fail $ show (ioe :: IOException)
+                         Left ioe    -> trace (show node ++ "/auditTrail: " ++ show (ioe :: IOException)) (return ())
                          Right nodes -> mapM_ encodeTrail nodes
     where encodeTrail n = [whamlet|<li .menu-123 .collapsed>
                                        <a href=#{url n} title=#{title n}>#{title n}
@@ -197,14 +199,17 @@ auditTrail node = do eitherNodes <- liftIO $ runErrorT getTrail
           title n       = case maybeTitleVal n of
                               Just v  -> show v
                               Nothing -> ""
-          getTrail :: ErrorT IOException IO [Node]
+          getTrail :: RepositoryContext [Node]
           getTrail      = do nodes <- foldrM appendToNodes [node] $ node_path node
                              let nodes' = tail nodes -- omit root node
-                             welcome <- getNode (node_repo node) (urlFromString "/welcome")
-                             let first = node_path $ head nodes'
-                             case first of ["welcome"] -> return nodes'
-                                           _           -> return (welcome : nodes')
-          appendToNodes :: PathComponent -> [Node] -> ErrorT IOException IO [Node]
+                             if nodes' == []
+                             then left $ userError "no root"
+                             else do
+                                welcome <- getNode (node_repo node) (urlFromString "/welcome")
+                                let first = node_path $ head nodes'
+                                case first of ["welcome"] -> return nodes'
+                                              _           -> return (welcome : nodes')
+          appendToNodes :: PathComponent -> [Node] -> RepositoryContext [Node]
           appendToNodes _ (n : ns) = do p <- getParentNode n
                                         return (p : n : ns)
 

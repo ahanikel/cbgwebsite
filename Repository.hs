@@ -1,6 +1,7 @@
 module Repository
     ( Repository (..)
     , openRepository
+    , RepositoryContext
     , Node (..)
     , getNode
     , getParentNode
@@ -22,8 +23,7 @@ import Utils
 import System.Directory (getDirectoryContents, doesFileExist, doesDirectoryExist)
 import Control.Monad (filterM)
 import System.FilePath (normalise, splitDirectories, (</>))
-import Control.Monad.Error (ErrorT(..))
-import Control.Exception (catch, SomeException, IOException, try)
+import Control.Monad.Trans.Either (EitherT, left)
 import System.IO.Error (userError)
 import Data.List (intercalate)
 
@@ -81,6 +81,9 @@ data Node = Node { node_name        :: String
                  }
     deriving (Read, Show, Eq)
 
+-- exported
+type RepositoryContext a = EitherT IOError IO a
+
 readProperties :: FilePath -> IO [Property]
 readProperties path = readFiles path      >>=
                       filterM filterFiles >>=
@@ -93,7 +96,7 @@ readProperties path = readFiles path      >>=
           readProperty (name, path) = readFile path >>= return . Property name . StringValue
 
 -- exported
-getNode :: Repository -> URL -> ErrorT IOException IO Node
+getNode :: Repository -> URL -> RepositoryContext Node
 getNode repo url = do let name       = case url of [] -> "/"
                                                    _  -> last url
                           filePath   = intercalate "/" (root repo : url)
@@ -101,13 +104,13 @@ getNode repo url = do let name       = case url of [] -> "/"
                       return $ Node name url props repo
 
 -- exported
-getParentNode :: Node -> ErrorT IOException IO Node
-getParentNode node | node_name node == "/" = fail "Root has no parent"
+getParentNode :: Node -> RepositoryContext Node
+getParentNode node | node_name node == "/" = left $ userError "Root has no parent"
 getParentNode node | otherwise = do let path     = init $ node_path node
                                     getNode (node_repo node) path
 
 -- exported
-getChildNodeNames :: Node -> ErrorT IOException IO [String]
+getChildNodeNames :: Node -> RepositoryContext [String]
 getChildNodeNames node = do let path       = node_path node
                                 url'       = '/' : foldr (</>) "" path
                                 repo       = node_repo node
@@ -118,7 +121,7 @@ getChildNodeNames node = do let path       = node_path node
                             check $ filterM dirs $ acceptable dirEntries
 
 -- exported
-getChildNode :: Node -> String -> ErrorT IOException IO Node
+getChildNode :: Node -> String -> RepositoryContext Node
 getChildNode node name = do let path      = node_path node
                                 path'     = path ++ [name]
                                 repo      = node_repo node
