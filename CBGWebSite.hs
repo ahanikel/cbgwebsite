@@ -21,6 +21,7 @@ import Network.HTTP.Types (status200)
 -- other imports
 import Control.Concurrent (MVar, newMVar)
 import Data.Text (Text, unpack, pack)
+import qualified Data.Text as T
 import Text.Pandoc (readMarkdown, writeHtml)
 import Control.Monad (filterM, liftM)
 import Data.List (intercalate)
@@ -30,6 +31,7 @@ import Control.Monad.Trans.Either (runEitherT, left)
 import Data.Foldable (foldrM)
 import Debug.Trace
 import Data.Maybe (fromMaybe)
+import Control.Applicative ((<$>), (<*>))
 
 staticFiles "static"
 
@@ -50,6 +52,7 @@ mkYesod "CBGWebSite" [parseRoutes|
     /content/+ContentPath        ContentR              GET
     /mitglieder/kalender         MemberCalendarR       GET
     /mitglieder/liste            MemberListR           GET
+    /mitglieder/edit/#Text       MemberR               GET POST
 |]
 
 instance Yesod CBGWebSite where
@@ -61,6 +64,7 @@ instance Yesod CBGWebSite where
     isAuthorized (AuthR _)           _     = return Authorized
     isAuthorized MemberCalendarR     False = return Authorized
     isAuthorized MemberListR         False = return Authorized
+    isAuthorized (MemberR _)         _     = return Authorized
     isAuthorized MembersR            False = do
       authUser <- maybeAuthId
       case authUser of
@@ -80,6 +84,8 @@ instance YesodAuth CBGWebSite where
     authPlugins _                    = [ authBrowserId def ]
     authHttpManager                  = httpManager
     maybeAuthId                      = lookupSession "_ID"
+
+--instance YesodJQuery CBGWebSite
 
 emptyWidget :: a -> Widget
 emptyWidget _ = [whamlet||]
@@ -234,28 +240,81 @@ getMemberCalendarR = selectRep $ do
         , "ort"      .= pack "9999 Testheim"
         ]
 
-data Member = Member { vorname :: String
-                     , name    :: String
-                     , strasse :: String
-                     , ort     :: String
+------------------------------------------------------------------------------------------
+--- Member List
+------------------------------------------------------------------------------------------
+
+data Member = Member { vorname :: Text
+                     , name    :: Text
+                     , strasse :: Text
+                     , ort     :: Text
                      } deriving (Show)
 
 instance ToJSON Member where
-    toJSON Member {..} = object [ "name"     .= pack name
-                                , "vorname"  .= pack vorname
-                                , "strasse"  .= pack strasse
-                                , "ort"      .= pack ort
+    toJSON Member {..} = object [ "name"     .= name
+                                , "vorname"  .= vorname
+                                , "strasse"  .= strasse
+                                , "ort"      .= ort
                                 ]
 
-getMember :: Node -> Member
-getMember node = Member (property "firstname")
-                        (property "lastname")
-                        (property "address")
-                        (property "city")
-    where property = show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
+memberForm :: Maybe Member -> Html -> MForm Handler (FormResult Member, Widget)
+memberForm mmember = renderDivs $ Member
+    <$> areq textField "Vorname" (vorname <$> mmember)
+    <*> areq textField "Name"    (name    <$> mmember)
+    <*> areq textField "Strasse" (strasse <$> mmember)
+    <*> areq textField "Ort"     (ort     <$> mmember)
+
+nodeToMember :: Node -> Member
+nodeToMember node = Member (property "firstname")
+                           (property "lastname")
+                           (property "address")
+                           (property "city")
+  where property = pack . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
+
+memberToNode :: Repository -> Text -> Member -> Node
+memberToNode repo memberName member = Node (unpack memberName)
+                                           (urlFromString $ unpack memberName)
+                                           [ (Property "firstname" $ StringValue $ unpack $ vorname member)
+                                           , (Property "lastname"  $ StringValue $ unpack $ name member)
+                                           , (Property "address"   $ StringValue $ unpack $ strasse member)
+                                           , (Property "city"      $ StringValue $ unpack $ ort member)
+                                           ]
+                                           repo
+
+getMemberR :: Text -> Handler Html
+getMemberR name = do app               <- getYesod
+                     let memberPath    =  urlFromString $ unpack name
+                     eitherMember      <- liftIO $ runEitherT $ getNode (memberRepo app) memberPath
+                     let mmember       =  liftM nodeToMember $ either (\e -> trace (show e) Nothing)
+                                                                      Just
+                                                                      eitherMember
+                     (widget, encType) <- generateFormPost $ memberForm mmember
+                     defaultLayout [whamlet|
+                        <form method=post action=@{MemberR name} enctype=#{encType}>
+                            ^{widget}
+                            <button>Submit
+                     |]
+
+postMemberR :: Text -> Handler Html
+postMemberR name = do 
+    ((result, widget), enctype) <- runFormPost $ memberForm Nothing
+    case result of FormSuccess member -> do app               <- getYesod
+                                            let memberPath    =  urlFromString $ unpack name
+                                                memberNode    =  memberToNode (memberRepo app) name member
+                                            result <- liftIO $ runEitherT $ writeNode memberNode
+                                            case result of
+                                                Left e -> return $ trace (show e) ()
+                                                _      -> return $ ()
+                                            redirect MemberListR
+                   _                  -> defaultLayout [whamlet|
+                                             <p>Da stimmt etwas nicht, versuch's nochmal
+                                             <form method=post action=@{MemberR name} enctype=#{enctype}>
+                                                 ^{widget}
+                                                 <button>Submit
+                                         |]
 
 getMemberList :: Node -> RepositoryContext [Member]
-getMemberList node = getChildNodes node >>= return . (map getMember)
+getMemberList node = getChildNodes node >>= return . (map nodeToMember)
 
 getMemberListR :: Handler TypedContent
 getMemberListR = selectRep $ do
@@ -273,6 +332,9 @@ getMemberListR = selectRep $ do
                                 <td>#{name member}
                                 <td>#{strasse member}
                                 <td>#{ort member}
+                                <td>
+                                    <a href=@{MemberR $ memberId member}>
+                                        <button>Edit
                 |]
     provideRep $ renderMembers returnJson
   where renderMembers :: HasContentType a => ([Member] -> Handler a) -> Handler a
@@ -283,3 +345,4 @@ getMemberListR = selectRep $ do
                   Left  e       -> do $logError $ pack $ show e
                                       as ([] :: [Member])
                   Right members -> as members
+        memberId member = T.concat [vorname member, (pack " "), name member]
