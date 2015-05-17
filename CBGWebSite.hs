@@ -1,4 +1,4 @@
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings, MultiParamTypeClasses, ViewPatterns #-}
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings, MultiParamTypeClasses, ViewPatterns, RecordWildCards #-}
 
 --module CBGWebSite (CBGWebSite(..)) where
 module CBGWebSite where
@@ -22,20 +22,23 @@ import Network.HTTP.Types (status200)
 import Control.Concurrent (MVar, newMVar)
 import Data.Text (Text, unpack, pack)
 import Text.Pandoc (readMarkdown, writeHtml)
-import Control.Monad (filterM)
+import Control.Monad (filterM, liftM)
 import Data.List (intercalate)
 import Control.Exception (IOException)
 import Data.Aeson (encode, object)
 import Control.Monad.Trans.Either (runEitherT, left)
 import Data.Foldable (foldrM)
 import Debug.Trace
+import Data.Maybe (fromMaybe)
 
 staticFiles "static"
 
-data CBGWebSite = CBGWebSite { getStatic   :: Static
-                             , getSem      :: MVar Bool
-                             , httpManager :: Manager
-                             , repo        :: Repository
+data CBGWebSite = CBGWebSite { getStatic    :: Static
+                             , getSem       :: MVar Bool
+                             , httpManager  :: Manager
+                             , contentRepo  :: Repository
+                             , memberRepo   :: Repository
+                             , calendarRepo :: Repository
                              }
 
 mkYesod "CBGWebSite" [parseRoutes|
@@ -46,9 +49,7 @@ mkYesod "CBGWebSite" [parseRoutes|
     /mitglieder                  MembersR              GET
     /content/+ContentPath        ContentR              GET
     /mitglieder/kalender         MemberCalendarR       GET
-    /mitglieder/kalender.json    MemberCalendarJsonR   GET
     /mitglieder/liste            MemberListR           GET
-    /mitglieder/liste.json       MemberListJsonR       GET
 |]
 
 instance Yesod CBGWebSite where
@@ -58,9 +59,8 @@ instance Yesod CBGWebSite where
     isAuthorized RootR               False = return Authorized
     isAuthorized FavR                False = return Authorized
     isAuthorized (AuthR _)           _     = return Authorized
-    isAuthorized MemberCalendarJsonR False = return Authorized
+    isAuthorized MemberCalendarR     False = return Authorized
     isAuthorized MemberListR         False = return Authorized
-    isAuthorized MemberListJsonR     False = return Authorized
     isAuthorized MembersR            False = do
       authUser <- maybeAuthId
       case authUser of
@@ -91,7 +91,7 @@ cbgLayout widget = do pageContent  <- widgetToPageContent widget
                       let path     =  map unpack $ pathInfo $ reqWaiRequest req
                       let repoPath =  tail path
                       app          <- getYesod
-                      eitherNode   <- liftIO $ runEitherT (getNode (repo app) repoPath)
+                      eitherNode   <- liftIO $ runEitherT (getNode (contentRepo app) repoPath)
                       navi         <- widgetToPageContent $ either emptyWidget navigationWidget eitherNode
                       trail        <- widgetToPageContent $ either emptyWidget auditTrail eitherNode
                       withUrlRenderer $(hamletFile "layout.hamlet")
@@ -138,7 +138,7 @@ getContentR (ContentPath pieces) = defaultLayout $ do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
-        node <- getNode (repo app) url
+        node <- getNode (contentRepo app) url
         return node
     case eitherNode of
         Left ioe -> notFound
@@ -213,46 +213,73 @@ auditTrail node = do eitherNodes <- liftIO $ runEitherT getTrail
           appendToNodes _ (n : ns) = do p <- getParentNode n
                                         return (p : n : ns)
 
-getMemberCalendarR :: Handler Html
-getMemberCalendarR = defaultLayout $ withAngularController "MemberCalendarController" $ do
-    [whamlet|
-        <table>
-            <tr>
-                <th ng-repeat="col in ['zeit', 'name', 'vorname', 'strasse', 'ort']">{{col}}
-            <tr ng-repeat="item in memberCalendarItems">
-                <td>{{item.zeit}}
-                <td>{{item.name}}
-                <td>{{item.vorname}}
-                <td>{{item.strasse}}
-                <td>{{item.ort}}
-    |]
+getMemberCalendarR :: Handler TypedContent
+getMemberCalendarR = selectRep $ do
+    provideRep $ defaultLayout $ withAngularController "MemberCalendarController" $ do
+        [whamlet|
+            <table>
+                <tr>
+                    <th ng-repeat="col in ['zeit', 'name', 'vorname', 'strasse', 'ort']">{{col}}
+                <tr ng-repeat="item in memberCalendarItems">
+                    <td>{{item.zeit}}
+                    <td>{{item.name}}
+                    <td>{{item.vorname}}
+                    <td>{{item.strasse}}
+                    <td>{{item.ort}}
+        |]
+    provideRep $ return $ object
+        [ "name"     .= pack "Meier"
+        , "vorname"  .= pack "Fritz"
+        , "strasse"  .= pack "Musterweg 23"
+        , "ort"      .= pack "9999 Testheim"
+        ]
 
-getMemberCalendarJsonR :: Handler ()
-getMemberCalendarJsonR = sendWaiResponse $ responseLBS
-                             status200
-                             [("Content-Type", "application/json")]
-                             "{ 'hello': 'world' }"
+data Member = Member { vorname :: String
+                     , name    :: String
+                     , strasse :: String
+                     , ort     :: String
+                     } deriving (Show)
 
-getMemberListR :: Handler Html
-getMemberListR = defaultLayout $ withAngularController "MemberListController" $ do
-    [whamlet|
-        <table>
-            <tr>
-                <th ng-repeat="col in ['vorname', 'name', 'strasse', 'ort']">{{col}}
-            <tr ng-repeat="item in memberListItems">
-                <td>{{item.vorname}}
-                <td>{{item.name}}
-                <td>{{item.strasse}}
-                <td>{{item.ort}}
-    |]
+instance ToJSON Member where
+    toJSON Member {..} = object [ "name"     .= pack name
+                                , "vorname"  .= pack vorname
+                                , "strasse"  .= pack strasse
+                                , "ort"      .= pack ort
+                                ]
 
-getMemberListJsonR :: Handler ()
-getMemberListJsonR = sendWaiResponse $ responseLBS
-                             status200
-                             [("Content-Type", "application/json")]
-                             $ encode [ object [ "name"     .= pack "Meier"
-                                               , "vorname"  .= pack "Fritz"
-                                               , "strasse"  .= pack "Musterweg 23"
-                                               , "ort"      .= pack "9999 Testheim"
-                                               ]
-                                      ]
+getMember :: Node -> Member
+getMember node = Member (property "firstname")
+                        (property "lastname")
+                        (property "address")
+                        (property "city")
+    where property = show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
+
+getMemberList :: Node -> RepositoryContext [Member]
+getMemberList node = getChildNodes node >>= return . (map getMember)
+
+getMemberListR :: Handler TypedContent
+getMemberListR = selectRep $ do
+    provideRep $ renderMembers $ \members ->
+                defaultLayout [whamlet|
+                    <table>
+                        <tr>
+                            <th>Vorname
+                            <th>Name
+                            <th>Strasse
+                            <th>Ort
+                        $forall member <- members
+                            <tr>
+                                <td>#{vorname member}
+                                <td>#{name member}
+                                <td>#{strasse member}
+                                <td>#{ort member}
+                |]
+    provideRep $ renderMembers returnJson
+  where renderMembers :: HasContentType a => ([Member] -> Handler a) -> Handler a
+        renderMembers as = do
+              app           <- getYesod
+              eitherMembers <- liftIO $ runEitherT $ getNode (memberRepo app) (urlFromString "/") >>= getMemberList
+              case eitherMembers of
+                  Left  e       -> do $logError $ pack $ show e
+                                      as ([] :: [Member])
+                  Right members -> as members

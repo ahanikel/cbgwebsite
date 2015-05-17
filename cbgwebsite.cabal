@@ -28,6 +28,7 @@ Executable CBGWebSite
                , aeson
                , mtl
                , either
+               , vector
 
 test-suite test
   Default-Language: Haskell2010

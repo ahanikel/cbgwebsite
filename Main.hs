@@ -11,4 +11,8 @@ import Control.Concurrent (newMVar)
 main = do sem            <- newMVar True
           staticSettings <- static "static"
           manager        <- newManager conduitManagerSettings
-          warp 8080 $ CBGWebSite staticSettings sem manager $ Repository "content"
+          warp 8080 $
+            CBGWebSite staticSettings sem manager
+                (Repository "content")
+                (Repository "members/list")
+                (Repository "members/calendar")

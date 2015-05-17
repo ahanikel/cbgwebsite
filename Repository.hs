@@ -7,9 +7,10 @@ module Repository
     , getParentNode
     , getChildNodeNames
     , getChildNode
+    , getChildNodes
     , Property (..)
     , getProperty
-    , Value
+    , Value (..)
     , URL
     , urlFromString
     , urlToString
@@ -126,6 +127,10 @@ getChildNode node name = do let path      = node_path node
                                 path'     = path ++ [name]
                                 repo      = node_repo node
                             getNode repo path'
+
+--exported
+getChildNodes :: Node -> RepositoryContext [Node]
+getChildNodes node = getChildNodeNames node >>= mapM (getChildNode node)
 
 --exported
 getProperty :: Node -> String -> Maybe Property
