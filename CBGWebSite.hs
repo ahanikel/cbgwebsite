@@ -138,7 +138,7 @@ getContentR (ContentPath pieces) = defaultLayout $ do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
-        node <- getNode (contentRepo app) url
+        node <- getNode (contentRepo app) $ trace (show url) url
         return node
     case eitherNode of
         Left ioe -> notFound
@@ -180,7 +180,7 @@ navigationWidget node = do eitherNodes <- liftIO $ runEitherT $ do
                                                    <li .menu-123 .collapsed>
                                                        <a href=#{url entry} title=#{title entry}>#{title entry}
                                |]
-    where url           = ("/content" ++) . urlToString . node_path
+    where url           = ("/content/" ++) . urlToString . node_path
           maybeTitleVal = fmap prop_value . flip getProperty ("title" :: String)
           title n       = case maybeTitleVal n of
                               Just v  -> show v
@@ -194,7 +194,7 @@ auditTrail node = do eitherNodes <- liftIO $ runEitherT getTrail
     where encodeTrail n = [whamlet|<li .menu-123 .collapsed>
                                        <a href=#{url n} title=#{title n}>#{title n}
                           |]
-          url           = ("/content" ++) . urlToString . node_path
+          url           = ("/content/" ++) . urlToString . node_path
           maybeTitleVal = fmap prop_value . flip getProperty ("title" :: String)
           title n       = case maybeTitleVal n of
                               Just v  -> show v

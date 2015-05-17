@@ -4,6 +4,9 @@ module Repository
     , RepositoryContext
     , Node (..)
     , getNode
+    , writeNode
+    , deleteNode
+    , overwriteNode
     , getParentNode
     , getChildNodeNames
     , getChildNode
@@ -14,8 +17,10 @@ module Repository
     , URL
     , urlFromString
     , urlToString
+    , urlFromFilePath
+    , urlToFilePath
     , PathComponent
-    , pathCompFromString
+    , pathCompFromFilePath
     , isRootNode
     )
 where
@@ -26,7 +31,7 @@ import Control.Monad (filterM)
 import System.FilePath (normalise, splitDirectories, (</>))
 import Control.Monad.Trans.Either (EitherT, left)
 import System.IO.Error (userError)
-import Data.List (intercalate)
+import Data.List (intercalate, isSuffixOf)
 
 -- exported
 data Repository = Repository { root :: FilePath
@@ -41,11 +46,21 @@ openRepository = Repository
 type PathComponent = String
 
 -- exported
-pathCompFromString :: FilePath -> PathComponent 
+pathCompFromFilePath :: FilePath -> PathComponent 
+pathCompFromFilePath = init . init -- remove ".n"/".p" suffix
+
+-- exported
+pathCompFromString :: String -> PathComponent 
 pathCompFromString = id
 
 -- exported
 type URL = [PathComponent]
+
+-- exported
+urlFromFilePath :: FilePath -> URL
+urlFromFilePath ""      = []
+urlFromFilePath ('/':s) = urlFromFilePath s
+urlFromFilePath s       = map pathCompFromFilePath $ splitDirectories $ normalise s
 
 -- exported
 urlFromString :: String -> URL
@@ -54,8 +69,13 @@ urlFromString ('/':s) = urlFromString s
 urlFromString s       = map pathCompFromString $ splitDirectories $ normalise s
 
 -- exported
+urlToFilePath :: URL -> FilePath
+urlToFilePath [] = ""
+urlToFilePath url = intercalate ".n/" url ++ ".n"
+
+-- exported
 urlToString :: URL -> String
-urlToString = ('/' :) . (intercalate "/")
+urlToString =  intercalate "/"
 
 -- exported
 data Value = StringValue String
@@ -92,17 +112,32 @@ readProperties path = readFiles path      >>=
     where
           -- return a list of pairs (fileName, completePath), e.g. ("text.md", "content/welcome/text.md")
           readFiles :: FilePath -> IO [(FilePath, FilePath)]
-          readFiles path            = getDirectoryContents path >>= return . map (\n -> (n, path </> n))
-          filterFiles (name, path)  = doesFileExist path
+          readFiles path            = getDirectoryContents path >>= return . map (\n -> (pathCompFromFilePath n, path </> n))
+          filterFiles (name, path)  = do exists <- doesFileExist path
+                                         let isProp = isSuffixOf ".p" path
+                                         return $ exists && isProp
           readProperty (name, path) = readFile path >>= return . Property name . StringValue
 
 -- exported
 getNode :: Repository -> URL -> RepositoryContext Node
 getNode repo url = do let name       = case url of [] -> "/"
                                                    _  -> last url
-                          filePath   = intercalate "/" (root repo : url)
+                          filePath   = root repo </> urlToFilePath url
                       props <- check (readProperties filePath)
                       return $ Node name url props repo
+
+--exported
+writeNode :: Node -> RepositoryContext ()
+writeNode = undefined
+
+--exported
+deleteNode :: Node -> RepositoryContext ()
+deleteNode = undefined
+
+--exported
+overwriteNode :: Node -> RepositoryContext ()
+overwriteNode node = do deleteNode node
+                        writeNode node
 
 -- exported
 getParentNode :: Node -> RepositoryContext Node
@@ -112,14 +147,18 @@ getParentNode node | otherwise = do let path     = init $ node_path node
 
 -- exported
 getChildNodeNames :: Node -> RepositoryContext [String]
-getChildNodeNames node = do let path       = node_path node
-                                url'       = '/' : foldr (</>) "" path
-                                repo       = node_repo node
-                                filePath   = root repo ++ url'
-                            dirEntries <- check $ getDirectoryContents filePath
-                            let acceptable = filter (`notElem` [".", ".."])
-                                dirs       = doesDirectoryExist . (filePath </>)
-                            check $ filterM dirs $ acceptable dirEntries
+getChildNodeNames node = check $ do let path        = node_path node
+                                        path'       = urlToFilePath path
+                                        repo        = node_repo node
+                                        filePath    = root repo </> path'
+                                    dirEntries <- getDirectoryContents filePath
+                                    let acceptable  = filter (`notElem` [".", ".."]) dirEntries
+                                        isNodeDir d = do let dir = filePath </> d
+                                                         exists <- doesDirectoryExist dir
+                                                         let isNode = isSuffixOf ".n" dir
+                                                         return (exists && isNode)
+                                    nodeDirs <- filterM isNodeDir acceptable
+                                    return $ map pathCompFromFilePath nodeDirs
 
 -- exported
 getChildNode :: Node -> String -> RepositoryContext Node
