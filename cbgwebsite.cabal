@@ -29,6 +29,7 @@ Executable CBGWebSite
                , mtl
                , either
                , vector
+               , process
 
 test-suite test
   Default-Language: Haskell2010

@@ -26,12 +26,14 @@ module Repository
 where
 
 import Utils
-import System.Directory (getDirectoryContents, doesFileExist, doesDirectoryExist)
+import System.Directory (getDirectoryContents, doesFileExist, doesDirectoryExist, createDirectoryIfMissing)
 import Control.Monad (filterM)
 import System.FilePath (normalise, splitDirectories, (</>))
 import Control.Monad.Trans.Either (EitherT, left)
 import System.IO.Error (userError)
 import Data.List (intercalate, isSuffixOf)
+import System.Process (rawSystem)
+import System.Exit (ExitCode (..))
 
 -- exported
 data Repository = Repository { root :: FilePath
@@ -118,6 +120,13 @@ readProperties path = readFiles path      >>=
                                          return $ exists && isProp
           readProperty (name, path) = readFile path >>= return . Property name . StringValue
 
+writeProperties :: [Property] -> FilePath -> IO ()
+writeProperties props path = mapM_ writeProperty props
+    where writeProperty prop = do let name     = prop_name prop ++ ".p"
+                                      value    = show $ prop_value prop
+                                      filePath = path </> name
+                                  writeFile filePath value
+
 -- exported
 getNode :: Repository -> URL -> RepositoryContext Node
 getNode repo url = do let name       = case url of [] -> "/"
@@ -128,11 +137,23 @@ getNode repo url = do let name       = case url of [] -> "/"
 
 --exported
 writeNode :: Node -> RepositoryContext ()
-writeNode = undefined
+writeNode node = check $ do let path     = node_path node
+                                path'    = urlToFilePath path
+                                repo     = node_repo node
+                                filePath = root repo </> path'
+                                props    = node_props node
+                            createDirectoryIfMissing True filePath
+                            writeProperties props filePath
 
 --exported
 deleteNode :: Node -> RepositoryContext ()
-deleteNode = undefined
+deleteNode node = check $ do let path     = node_path node
+                                 path'    = urlToFilePath path
+                                 repo     = node_repo node
+                                 filePath = root repo </> path'
+                             exitCode <- rawSystem "/bin/rm" ["-rf", filePath]
+                             case exitCode of ExitFailure n -> ioError $ userError $ "deleteNode failed with exit code " ++ show n
+                                              ExitSuccess   -> return ()
 
 --exported
 overwriteNode :: Node -> RepositoryContext ()
