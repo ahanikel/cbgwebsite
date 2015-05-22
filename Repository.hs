@@ -22,14 +22,15 @@ module Repository
     , PathComponent
     , pathCompFromFilePath
     , isRootNode
+    , Persistent (..)
     )
 where
 
 import Utils
 import System.Directory (getDirectoryContents, doesFileExist, doesDirectoryExist, createDirectoryIfMissing)
-import Control.Monad (filterM)
+import Control.Monad (filterM, liftM)
 import System.FilePath (normalise, splitDirectories, (</>))
-import Control.Monad.Trans.Either (EitherT, left)
+import Control.Monad.Trans.Either (EitherT, left, runEitherT)
 import System.IO.Error (userError)
 import Data.List (intercalate, isSuffixOf)
 import System.Process (rawSystem)
@@ -200,3 +201,12 @@ getProperty node name = fmap (Property name) $ lookup name props
 --exported
 isRootNode :: Node -> Bool
 isRootNode n = node_path n == []
+
+--exported
+class Persistent a where
+    toNode       :: Repository -> String -> a -> Node
+    fromNode     :: Node -> a
+    writeItem    :: Repository -> String -> a -> IO (Either IOError ())
+    writeItem repo name a = runEitherT $ writeNode $ toNode repo name a
+    readItem     :: Repository -> String -> IO (Either IOError a)
+    readItem repo name = runEitherT $ liftM fromNode $ getNode repo $ urlFromString name

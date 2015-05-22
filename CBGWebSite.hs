@@ -257,6 +257,21 @@ instance ToJSON Member where
                                 , "ort"      .= ort
                                 ]
 
+instance Persistent Member where
+    fromNode node = Member (property "firstname")
+                           (property "lastname")
+                           (property "address")
+                           (property "city")
+      where property = pack . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
+    toNode repo memberName member = Node memberName
+                                         (urlFromString memberName)
+                                         [ (Property "firstname" $ StringValue $ unpack $ vorname member)
+                                         , (Property "lastname"  $ StringValue $ unpack $ name member)
+                                         , (Property "address"   $ StringValue $ unpack $ strasse member)
+                                         , (Property "city"      $ StringValue $ unpack $ ort member)
+                                         ]
+                                         repo
+
 memberForm :: Maybe Member -> Html -> MForm Handler (FormResult Member, Widget)
 memberForm mmember = renderDivs $ Member
     <$> areq textField "Vorname" (vorname <$> mmember)
@@ -264,30 +279,12 @@ memberForm mmember = renderDivs $ Member
     <*> areq textField "Strasse" (strasse <$> mmember)
     <*> areq textField "Ort"     (ort     <$> mmember)
 
-nodeToMember :: Node -> Member
-nodeToMember node = Member (property "firstname")
-                           (property "lastname")
-                           (property "address")
-                           (property "city")
-  where property = pack . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
-
-memberToNode :: Repository -> Text -> Member -> Node
-memberToNode repo memberName member = Node (unpack memberName)
-                                           (urlFromString $ unpack memberName)
-                                           [ (Property "firstname" $ StringValue $ unpack $ vorname member)
-                                           , (Property "lastname"  $ StringValue $ unpack $ name member)
-                                           , (Property "address"   $ StringValue $ unpack $ strasse member)
-                                           , (Property "city"      $ StringValue $ unpack $ ort member)
-                                           ]
-                                           repo
-
 getMemberR :: Text -> Handler Html
 getMemberR name = do app               <- getYesod
-                     let memberPath    =  urlFromString $ unpack name
-                     eitherMember      <- liftIO $ runEitherT $ getNode (memberRepo app) memberPath
-                     let mmember       =  liftM nodeToMember $ either (\e -> trace (show e) Nothing)
-                                                                      Just
-                                                                      eitherMember
+                     eitherMember      <- liftIO $ readItem (memberRepo app) (unpack name)
+                     let mmember       =  either (\e -> trace (show e) Nothing)
+                                                 Just
+                                                 eitherMember
                      (widget, encType) <- generateFormPost $ memberForm mmember
                      defaultLayout [whamlet|
                         <form method=post action=@{MemberR name} enctype=#{encType}>
@@ -299,9 +296,7 @@ postMemberR :: Text -> Handler Html
 postMemberR name = do 
     ((result, widget), enctype) <- runFormPost $ memberForm Nothing
     case result of FormSuccess member -> do app               <- getYesod
-                                            let memberPath    =  urlFromString $ unpack name
-                                                memberNode    =  memberToNode (memberRepo app) name member
-                                            result <- liftIO $ runEitherT $ writeNode memberNode
+                                            result <- liftIO $ writeItem (memberRepo app) (unpack name) member
                                             case result of
                                                 Left e -> return $ trace (show e) ()
                                                 _      -> return $ ()
@@ -314,7 +309,7 @@ postMemberR name = do
                                          |]
 
 getMemberList :: Node -> RepositoryContext [Member]
-getMemberList node = getChildNodes node >>= return . (map nodeToMember)
+getMemberList node = getChildNodes node >>= return . (map fromNode)
 
 getMemberListR :: Handler TypedContent
 getMemberListR = selectRep $ do
