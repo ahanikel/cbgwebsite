@@ -32,6 +32,7 @@ import Data.Foldable (foldrM)
 import Debug.Trace
 import Data.Maybe (fromMaybe)
 import Control.Applicative ((<$>), (<*>))
+import Data.DateTime
 
 staticFiles "static"
 
@@ -44,28 +45,30 @@ data CBGWebSite = CBGWebSite { getStatic    :: Static
                              }
 
 mkYesod "CBGWebSite" [parseRoutes|
-    /                            RootR                 GET
-    /favicon.ico                 FavR                  GET
-    /static                      StaticR               Static          getStatic
-    /auth                        AuthR                 Auth            getAuth
-    /mitglieder                  MembersR              GET
-    /content/+ContentPath        ContentR              GET
-    /mitglieder/kalender         MemberCalendarR       GET
-    /mitglieder/liste            MemberListR           GET
-    /mitglieder/edit/#Text       MemberR               GET POST
+    /                                RootR                 GET
+    /favicon.ico                     FavR                  GET
+    /static                          StaticR               Static          getStatic
+    /auth                            AuthR                 Auth            getAuth
+    /members                         MembersR              GET
+    /content/+ContentPath            ContentR              GET
+    /members/calendar/#Int/#Int      MemberCalendarR       GET
+    /members/event/edit/#Text        EventR                GET POST
+    /members/list                    MemberListR           GET
+    /members/list/edit/#Text         MemberR               GET POST
 |]
 
 instance Yesod CBGWebSite where
     defaultLayout                          = cbgLayout
     approot                                = ApprootStatic ""
     -- isAuthorized route isWriteRequest? = ...
-    isAuthorized RootR               False = return Authorized
-    isAuthorized FavR                False = return Authorized
-    isAuthorized (AuthR _)           _     = return Authorized
-    isAuthorized MemberCalendarR     False = return Authorized
-    isAuthorized MemberListR         False = return Authorized
-    isAuthorized (MemberR _)         _     = return Authorized
-    isAuthorized MembersR            False = do
+    isAuthorized RootR                 False = return Authorized
+    isAuthorized FavR                  False = return Authorized
+    isAuthorized (AuthR _)             _     = return Authorized
+    isAuthorized (MemberCalendarR _ _) False = return Authorized
+    isAuthorized (EventR _)            _     = return Authorized
+    isAuthorized MemberListR           False = return Authorized
+    isAuthorized (MemberR _)           _     = return Authorized
+    isAuthorized MembersR              False = do
       authUser <- maybeAuthId
       case authUser of
         Just userName | userName `has` Read `On` Members -> return Authorized
@@ -219,26 +222,112 @@ auditTrail node = do eitherNodes <- liftIO $ runEitherT getTrail
           appendToNodes _ (n : ns) = do p <- getParentNode n
                                         return (p : n : ns)
 
-getMemberCalendarR :: Handler TypedContent
-getMemberCalendarR = selectRep $ do
-    provideRep $ defaultLayout $ withAngularController "MemberCalendarController" $ do
+
+------------------------------------------------------------------------------------------
+--- Member Calendar
+------------------------------------------------------------------------------------------
+
+data Event = Event { ev_startDate   :: DateTime
+                   , ev_endDate     :: DateTime
+                   , ev_description :: Text
+                   } deriving (Show)
+
+instance Persistent Event where
+    fromNode node = Event (dateProperty "startDate")
+                          (dateProperty "endDate")
+                          (textProperty "description")
+      where textProperty =                         pack          . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node -- we should be throwing here in case of error
+            dateProperty = fromMaybe startOfTime . fromSqlString . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node -- we should be throwing here in case of error
+    toNode repo eventName event = Node eventName
+                                         (urlFromString eventName)
+                                         [ (Property "startDate"   $ StringValue $ toSqlString $ ev_startDate   event)
+                                         , (Property "endDate"     $ StringValue $ toSqlString $ ev_endDate     event)
+                                         , (Property "description" $ StringValue $ unpack      $ ev_description event)
+                                         ]
+                                         repo
+
+instance ToJSON Event where
+    toJSON Event {..} = object [ "startDate"   .= toSqlString ev_startDate
+                               , "endDate"     .= toSqlString ev_endDate
+                               , "description" .=             ev_description
+                               ]
+
+getMemberCalendarR :: Int -> Int -> Handler TypedContent
+getMemberCalendarR year month = if month < 1 || month > 12
+                                then notFound
+                                else selectRep $ do
+    provideRep $ renderEvents $ \events -> defaultLayout
         [whamlet|
             <table>
                 <tr>
-                    <th ng-repeat="col in ['zeit', 'name', 'vorname', 'strasse', 'ort']">{{col}}
-                <tr ng-repeat="item in memberCalendarItems">
-                    <td>{{item.zeit}}
-                    <td>{{item.name}}
-                    <td>{{item.vorname}}
-                    <td>{{item.strasse}}
-                    <td>{{item.ort}}
+                    <th>Startdatum
+                    <th>Enddatum
+                    <th>Beschreibung
+                $forall event <- events
+                    <tr>
+                        <td>#{toSqlString $ ev_startDate   event}
+                        <td>#{toSqlString $ ev_endDate     event}
+                        <td>^{renderDesc  $ ev_description event}
+                        <td>
+                            <a href=@{EventR $ eventId event}>
+                                <button>Edit
         |]
-    provideRep $ return $ object
-        [ "name"     .= pack "Meier"
-        , "vorname"  .= pack "Fritz"
-        , "strasse"  .= pack "Musterweg 23"
-        , "ort"      .= pack "9999 Testheim"
-        ]
+    provideRep $ renderEvents returnJson
+  where renderEvents :: HasContentType a => ([Event] -> Handler a) -> Handler a
+        renderEvents as = do
+              app           <- getYesod
+              eitherEvents  <- liftIO $ runEitherT $ getNode (calendarRepo app) url >>= getEventList
+              case eitherEvents of
+                  Left  e       -> do $logError $ pack $ show e
+                                      as ([] :: [Event])
+                  Right events -> as events
+        url = map (pathCompFromString . show) [year, month]
+        getEventList :: Node -> RepositoryContext [Event]
+        getEventList node = getChildNodes node >>= return . (map fromNode)
+        renderDesc desc = writeHtml def $ readMarkdown def $ unpack desc
+        eventId event = pack $ intercalate "/" [show year, show month, toSqlString $ ev_startDate event]
+            where (year, month, _) = toGregorian' $ ev_startDate event
+
+eventForm :: Maybe Event -> Html -> MForm Handler (FormResult Event, Widget)
+eventForm mevent = renderDivs $ makeEvent
+    <$> areq textField "Startdatum"   ((pack . toSqlString . ev_startDate)  <$> mevent)
+    <*> areq textField "Enddatum"     ((pack . toSqlString . ev_endDate)    <$> mevent)
+    <*> areq textField "Beschreibung" (                      ev_description <$> mevent)
+  where makeEvent start end desc = Event (fromMaybe startOfTime $ fromSqlString $ unpack start)
+                                         (fromMaybe startOfTime $ fromSqlString $ unpack end)
+                                         desc
+
+getEventR :: Text -> Handler Html
+getEventR name = do app               <- getYesod
+                    eitherEvent       <- liftIO $ readItem (calendarRepo app) (unpack name)
+                    let mevent        =  either (\e -> trace (show e) Nothing)
+                                                Just
+                                                eitherEvent
+                    (widget, encType) <- generateFormPost $ eventForm mevent
+                    defaultLayout [whamlet|
+                       <form method=post action=@{EventR name} enctype=#{encType}>
+                           ^{widget}
+                           <button>Submit
+                    |]
+
+postEventR :: Text -> Handler Html
+postEventR name = do
+    ((result, widget), enctype) <- runFormPost $ eventForm Nothing
+    case result of FormSuccess event -> do app               <- getYesod
+                                           let strName       =  unpack name
+                                           result <- liftIO $ writeItem (calendarRepo app) strName event
+                                           case result of
+                                               Left e -> return $ trace (show e) ()
+                                               _      -> return $ ()
+                                           let (year, month, _) = toGregorian' $ ev_startDate event
+                                           redirect $ MemberCalendarR (fromInteger year) month
+                   _                 -> defaultLayout [whamlet|
+                                            <p>Da stimmt etwas nicht, versuch's nochmal
+                                            <form method=post action=@{EventR name} enctype=#{enctype}>
+                                                ^{widget}
+                                                <button>Submit
+                                        |]
+
 
 ------------------------------------------------------------------------------------------
 --- Member List
@@ -308,9 +397,6 @@ postMemberR name = do
                                                  <button>Submit
                                          |]
 
-getMemberList :: Node -> RepositoryContext [Member]
-getMemberList node = getChildNodes node >>= return . (map fromNode)
-
 getMemberListR :: Handler TypedContent
 getMemberListR = selectRep $ do
     provideRep $ renderMembers $ \members ->
@@ -341,3 +427,5 @@ getMemberListR = selectRep $ do
                                       as ([] :: [Member])
                   Right members -> as members
         memberId member = T.concat [vorname member, (pack " "), name member]
+        getMemberList :: Node -> RepositoryContext [Member]
+        getMemberList node = getChildNodes node >>= return . (map fromNode)

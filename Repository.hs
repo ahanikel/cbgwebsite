@@ -21,6 +21,7 @@ module Repository
     , urlToFilePath
     , PathComponent
     , pathCompFromFilePath
+    , pathCompFromString
     , isRootNode
     , Persistent (..)
     )

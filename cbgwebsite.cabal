@@ -30,6 +30,7 @@ Executable CBGWebSite
                , either
                , vector
                , process
+               , datetime
 
 test-suite test
   Default-Language: Haskell2010
@@ -38,7 +39,7 @@ test-suite test
   type: exitcode-stdio-1.0
   build-depends: base
                , cbgwebsite
-  --ghc-options: -O2
+  ghc-options: -O2
 
 source-repository head
   type:     git
