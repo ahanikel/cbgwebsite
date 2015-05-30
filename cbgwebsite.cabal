@@ -31,6 +31,8 @@ Executable CBGWebSite
                , vector
                , process
                , datetime
+               , uuid
+               , transformers
 
 test-suite test
   Default-Language: Haskell2010

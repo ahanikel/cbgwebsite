@@ -1,6 +1,7 @@
 -- CBG
 import CBGWebSite
 import Repository
+import qualified NewRepository as N
 
 -- Yesod
 import Yesod
