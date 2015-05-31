@@ -58,7 +58,7 @@ class Monad m => Repository r m | m -> r where
     r_removeProperty :: r -> Node -> Property -> EitherT IOError m ()
     r_modifyProperty :: r -> Node -> Property -> EitherT IOError m ()
 
-instance Repository (TransactionContext ()) TransactionContext where
+instance Repository FakeRepository TransactionContext where
     r_getTransaction tc             = left $ userError "r_getTransaction not implemented"
     r_logBegin       repo trans     = left $ userError "r_logBegin not implemented"
     r_logEnd         repo trans     = left $ userError "r_logEnd not implemented"
@@ -74,9 +74,9 @@ instance Repository LocalRepository IO where
                                                  return $ Transaction uuid ops
     r_logBegin repo trans           = check $ do createDirectoryIfMissing True $ localrep_root repo
                                                  let localrep_logbegin = localrep_root repo </> "begin.log"
-                                                 appendFile localrep_logbegin  $ show trans
+                                                 appendFile localrep_logbegin  $ show trans ++ "\n"
     r_logEnd   repo trans           = check $ do let localrep_logend   = localrep_root repo </> "end.log"
-                                                 appendFile localrep_logend    $ show trans
+                                                 appendFile localrep_logend    $ show trans ++ "\n"
     r_addNode        repo node      = left $ userError "r_addNode not implemented"
     r_removeNode     repo node      = left $ userError "r_removeNode not implemented"
     r_addProperty    repo node prop = left $ userError "r_addProperty not implemented"
@@ -95,15 +95,6 @@ instance Repository FakeRepository (Writer [String]) where
     r_removeProperty repo node prop = tell ["r_removeProperty " ++ show node ++ " " ++ show prop]
     r_modifyProperty repo node prop = tell ["r_modifyProperty " ++ show node ++ " " ++ show prop]
 
-addNode        node      = tell[AddNode        node]
-removeNode     node      = tell[RemoveNode     node]
-addProperty    node prop = tell[AddProperty    node prop]
-removeProperty node prop = tell[RemoveProperty node prop]
-modifyProperty node prop = tell[ModifyProperty node prop]
-
-dryRunTransaction :: TransactionContext a -> [Operation]
-dryRunTransaction = snd . runWriter . runTC
-
 runTransaction :: Repository r m => r -> TransactionContext a -> m (Either IOError Transaction)
 runTransaction repo tc = runEitherT $ do trans <- r_getTransaction tc
                                          r_logBegin repo trans
@@ -117,8 +108,9 @@ runTransaction repo tc = runEitherT $ do trans <- r_getTransaction tc
                                   ModifyProperty node prop -> r_modifyProperty repo node prop
 
 doSomething :: TransactionContext ()
-doSomething = do addNode     node
-                 addProperty node property
+doSomething = do _ <- runEitherT $ do r_addNode     FakeRepository node
+                                      r_addProperty FakeRepository node property
+                 return ()
     where node     = Node        "/content/docs/index.html"
           property = Property    "sling:resourceType" value
           value    = StringValue "cq:Page"
@@ -129,3 +121,5 @@ doSomething = do addNode     node
 
 test_runTransaction = do res <- runTransaction (LocalRepository "/tmp/testrepo") doSomething
                          putStrLn $ show res
+
+test_doSomething = putStrLn $ show $ runWriter $ runTC doSomething
