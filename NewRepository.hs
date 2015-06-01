@@ -7,15 +7,16 @@ import Control.Monad.Writer                 (MonadWriter, Writer, runWriter, tel
 import Control.Applicative                  (Applicative)
 import Control.Monad.IO.Class               (MonadIO)
 import Control.Monad.Trans.Either           (EitherT, runEitherT, left)
-import Control.Exception                    (throwIO, try)
+import Control.Exception                    (throwIO, catch)
 import Data.Functor                         (Functor)
 import Data.DateTime                        (DateTime)
 import Data.UUID                            (UUID, nil)
 import Data.UUID.V4                         (nextRandom)
 import System.FilePath                      ((</>))
 import System.IO                            (appendFile)
-import System.Directory                     (createDirectoryIfMissing)
+import System.Directory                     (createDirectoryIfMissing, doesDirectoryExist, removeDirectoryRecursive, removeFile)
 import Utils                                (check)
+import Debug.Trace
 
 data Transaction = Transaction { ta_uuid :: UUID
                                , ta_ops  :: [Operation]
@@ -47,6 +48,7 @@ newtype TransactionContext a = TC { runTC :: Writer [Operation] a }
     deriving (Monad, Functor, Applicative, MonadWriter [Operation])
 
 data LocalRepository = LocalRepository { localrep_root :: FilePath }
+    deriving (Show)
 
 class Monad m => Repository r m | m -> r where
     r_getTransaction :: TransactionContext a  -> EitherT IOError m Transaction
@@ -77,11 +79,29 @@ instance Repository LocalRepository IO where
                                                  appendFile localrep_logbegin  $ show trans ++ "\n"
     r_logEnd   repo trans           = check $ do let localrep_logend   = localrep_root repo </> "end.log"
                                                  appendFile localrep_logend    $ show trans ++ "\n"
-    r_addNode        repo node      = left $ userError "r_addNode not implemented"
-    r_removeNode     repo node      = left $ userError "r_removeNode not implemented"
-    r_addProperty    repo node prop = left $ userError "r_addProperty not implemented"
-    r_removeProperty repo node prop = left $ userError "r_removeProperty not implemented"
-    r_modifyProperty repo node prop = left $ userError "r_modifyProperty not implemented"
+    r_addNode        repo node      = check $ do let dir = localrep_root repo ++ path node
+                                                 exists <- doesDirectoryExist dir
+                                                 if exists
+                                                 then throwIO $ userError "node exists already"
+                                                 else createDirectoryIfMissing True dir
+    r_removeNode     repo node      = check $ do let dir = localrep_root repo ++ path node
+                                                 exists <- doesDirectoryExist dir
+                                                 if exists
+                                                 then removeDirectoryRecursive dir
+                                                 else throwIO $ userError "node does not exist"
+    r_addProperty    repo node prop = check $ do let dir = localrep_root repo ++ path node
+                                                     file = dir ++ '/' : prop_name prop
+                                                 exists <- doesDirectoryExist dir
+                                                 if exists
+                                                 then writeFile file $ show $ prop_value prop
+                                                 else throwIO $ userError "node does not exist"
+    r_removeProperty repo node prop = check $ do let dir = localrep_root repo ++ path node
+                                                     file = dir ++ '/' : prop_name prop
+                                                 exists <- doesDirectoryExist dir
+                                                 if exists
+                                                 then removeFile file
+                                                 else throwIO $ userError "node does not exist"
+    r_modifyProperty                = r_addProperty -- for now...
 
 data FakeRepository = FakeRepository
 
@@ -108,7 +128,8 @@ runTransaction repo tc = runEitherT $ do trans <- r_getTransaction tc
                                   ModifyProperty node prop -> r_modifyProperty repo node prop
 
 doSomething :: TransactionContext ()
-doSomething = do _ <- runEitherT $ do r_addNode     FakeRepository node
+doSomething = do _ <- runEitherT $ do r_removeNode  FakeRepository node
+                                      r_addNode     FakeRepository node
                                       r_addProperty FakeRepository node property
                  return ()
     where node     = Node        "/content/docs/index.html"
