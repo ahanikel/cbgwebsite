@@ -11,7 +11,7 @@ Build-Type:     Simple
 Description:    The Come Back Glöbb Web Site
 
 Executable CBGWebSite
-  Main-Is: Main.hs
+  Main-Is: CH/ComeBackGloebb/CBGWebSite/Web/Main/Main.hs
   Default-Language: Haskell2010
   Build-Depends: base
                , directory
@@ -33,16 +33,17 @@ Executable CBGWebSite
                , datetime
                , uuid
                , transformers
+  Hs-Source-Dirs: src/main/haskell
 
 test-suite test
   Default-Language: Haskell2010
-  hs-source-dirs: test
-  main-is: main.hs
-  type: exitcode-stdio-1.0
-  build-depends: base
+  Hs-Source-Dirs: src/test/haskell
+  Main-Is: main.hs
+  Type: exitcode-stdio-1.0
+  Build-Depends: base
                , cbgwebsite
   ghc-options: -O2
 
 source-repository head
   type:     git
-  location: https://github.com/haskell/cbgwebsite
+  location: https://github.com/ahanikel/cbgwebsite

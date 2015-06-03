@@ -1,7 +1,7 @@
 -- CBG
-import CBGWebSite
-import Repository
-import qualified NewRepository as N
+import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite
+import           ch.comebackgloebb.cbgwebsite.repo.impl.Repository
+import qualified ch.comebackgloebb.cbgwebsite.repo.impl.NewRepository as N
 
 -- Yesod
 import Yesod

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Users (has) where
+module ch.comebackgloebb.cbgwebsite.web.impl.Users (has) where
 
 import Privileges
 import Data.Text (Text)

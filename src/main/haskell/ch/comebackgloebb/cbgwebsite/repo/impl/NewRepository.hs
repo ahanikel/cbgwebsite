@@ -1,22 +1,26 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances, FlexibleInstances #-}
 
-module NewRepository where
+module ch.comebackgloebb.cbgwebsite.repo.impl.NewRepository where
 
-import Control.Monad                        (Monad, liftM, liftM2)
-import Control.Monad.Writer                 (MonadWriter, Writer, runWriter, tell)
-import Control.Applicative                  (Applicative)
-import Control.Monad.IO.Class               (MonadIO)
-import Control.Monad.Trans.Either           (EitherT, runEitherT, left)
-import Control.Exception                    (throwIO, catch)
-import Data.Functor                         (Functor)
-import Data.DateTime                        (DateTime)
-import Data.UUID                            (UUID, nil)
-import Data.UUID.V4                         (nextRandom)
-import System.FilePath                      ((</>))
-import System.IO                            (appendFile)
-import System.Directory                     (createDirectoryIfMissing, doesDirectoryExist, removeDirectoryRecursive, removeFile)
-import Utils                                (check)
-import Debug.Trace
+import Control.Monad                                (Monad, liftM, liftM2)
+import Control.Monad.Writer                         (MonadWriter, Writer, runWriter, tell)
+import Control.Applicative                          (Applicative)
+import Control.Monad.IO.Class                       (MonadIO)
+import Control.Monad.Trans.Either                   (EitherT, runEitherT, left)
+import Control.Exception                            (throwIO, catch)
+import Data.Functor                                 (Functor)
+import Data.DateTime                                (DateTime)
+import Data.UUID                                    (UUID, nil)
+import Data.UUID.V4                                 (nextRandom)
+import System.FilePath                              ((</>))
+import System.IO                                    (appendFile)
+import System.Directory                             (createDirectoryIfMissing, doesDirectoryExist, removeDirectoryRecursive, removeFile)
+import ch.comebackgloebb.cbgwebsite.repo.impl.Utils (check)
+
+
+------------------------------------------------------------------------------------
+-- Types
+------------------------------------------------------------------------------------
 
 data Transaction = Transaction { ta_uuid :: UUID
                                , ta_ops  :: [Operation]
@@ -50,6 +54,11 @@ newtype TransactionContext a = TC { runTC :: Writer [Operation] a }
 data LocalRepository = LocalRepository { localrep_root :: FilePath }
     deriving (Show)
 
+
+------------------------------------------------------------------------------------
+-- Classes
+------------------------------------------------------------------------------------
+
 class Monad m => Repository r m | m -> r where
     r_getTransaction :: TransactionContext a  -> EitherT IOError m Transaction
     r_logBegin       :: r -> Transaction      -> EitherT IOError m ()
@@ -59,6 +68,11 @@ class Monad m => Repository r m | m -> r where
     r_addProperty    :: r -> Node -> Property -> EitherT IOError m ()
     r_removeProperty :: r -> Node -> Property -> EitherT IOError m ()
     r_modifyProperty :: r -> Node -> Property -> EitherT IOError m ()
+
+
+------------------------------------------------------------------------------------
+-- Instances
+------------------------------------------------------------------------------------
 
 instance Repository FakeRepository TransactionContext where
     r_getTransaction tc             = left $ userError "r_getTransaction not implemented"

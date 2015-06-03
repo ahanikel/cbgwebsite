@@ -1,7 +1,6 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings, MultiParamTypeClasses, ViewPatterns, RecordWildCards #-}
 
---module CBGWebSite (CBGWebSite(..)) where
-module CBGWebSite where
+module ch.comebackgloebb.cbgwebsite.web.impl.CBGWebSite where
 
 -- CBG
 import Privileges
