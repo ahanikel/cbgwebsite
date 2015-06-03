@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances, FlexibleInstances #-}
 
-module ch.comebackgloebb.cbgwebsite.repo.impl.NewRepository where
+module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.NewRepository where
 
 import Control.Monad                                (Monad, liftM, liftM2)
 import Control.Monad.Writer                         (MonadWriter, Writer, runWriter, tell)
@@ -15,7 +15,7 @@ import Data.UUID.V4                                 (nextRandom)
 import System.FilePath                              ((</>))
 import System.IO                                    (appendFile)
 import System.Directory                             (createDirectoryIfMissing, doesDirectoryExist, removeDirectoryRecursive, removeFile)
-import ch.comebackgloebb.cbgwebsite.repo.impl.Utils (check)
+import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils (check)
 
 
 ------------------------------------------------------------------------------------

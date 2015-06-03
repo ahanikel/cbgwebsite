@@ -1,4 +1,4 @@
-module ch.comebackgloebb.cbgwebsite.repo.impl.Repository
+module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     ( Repository (..)
     , openRepository
     , RepositoryContext
@@ -27,7 +27,7 @@ module ch.comebackgloebb.cbgwebsite.repo.impl.Repository
     )
 where
 
-import ch.comebackgloebb.cbgwebsite.repo.impl.Utils
+import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
 import System.Directory (getDirectoryContents, doesFileExist, doesDirectoryExist, createDirectoryIfMissing)
 import Control.Monad (filterM, liftM)
 import System.FilePath (normalise, splitDirectories, (</>))

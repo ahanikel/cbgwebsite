@@ -1,11 +1,11 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings, MultiParamTypeClasses, ViewPatterns, RecordWildCards #-}
 
-module ch.comebackgloebb.cbgwebsite.web.impl.CBGWebSite where
+module CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite where
 
 -- CBG
-import Privileges
-import Users
-import Repository
+import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
+import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
+import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 
 -- Yesod
 import Yesod
@@ -33,7 +33,7 @@ import Data.Maybe (fromMaybe)
 import Control.Applicative ((<$>), (<*>))
 import Data.DateTime
 
-staticFiles "static"
+staticFiles "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static"
 
 data CBGWebSite = CBGWebSite { getStatic    :: Static
                              , getSem       :: MVar Bool
@@ -102,7 +102,7 @@ cbgLayout widget = do pageContent  <- widgetToPageContent widget
                       eitherNode   <- liftIO $ runEitherT (getNode (contentRepo app) repoPath)
                       navi         <- widgetToPageContent $ either emptyWidget navigationWidget eitherNode
                       trail        <- widgetToPageContent $ either emptyWidget auditTrail eitherNode
-                      withUrlRenderer $(hamletFile "layout.hamlet")
+                      withUrlRenderer $(hamletFile "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/Impl/layout.hamlet")
 
 withJQuery :: Widget -> Widget
 withJQuery widget = do
@@ -129,7 +129,7 @@ getRootR :: Handler ()
 getRootR = redirect ("/content/welcome" :: String)
 
 getFavR :: Handler ()
-getFavR = sendFile "image/png" "static/cbg-favicon.png"
+getFavR = sendFile "image/png" "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static/cbg-favicon.png"
 
 getMembersR :: Handler Html
 getMembersR = defaultLayout [whamlet|<h1>Welcome to the members area|]

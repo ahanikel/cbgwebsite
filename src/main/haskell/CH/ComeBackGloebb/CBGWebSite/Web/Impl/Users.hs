@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module ch.comebackgloebb.cbgwebsite.web.impl.Users (has) where
+module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users (has) where
 
-import Privileges
+import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
 import Data.Text (Text)
 
 infixl 5 `has`

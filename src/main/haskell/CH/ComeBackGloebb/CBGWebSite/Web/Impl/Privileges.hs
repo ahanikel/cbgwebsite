@@ -1,4 +1,4 @@
-module ch.comebackgloebb.cbgwebsite.web.impl.Privileges ( Privilege(..)
+module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges ( Privilege(..)
                                                         , Section(..)
                                                         , Permission(..)
                                                         ) where

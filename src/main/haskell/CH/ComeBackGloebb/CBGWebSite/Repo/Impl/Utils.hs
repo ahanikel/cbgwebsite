@@ -1,4 +1,4 @@
-module ch.comebackgloebb.cbgwebsite.repo.impl.Utils (check) where
+module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils (check) where
 
 import Control.Monad.Trans.Either (EitherT (..))
 import System.IO.Error (tryIOError)
