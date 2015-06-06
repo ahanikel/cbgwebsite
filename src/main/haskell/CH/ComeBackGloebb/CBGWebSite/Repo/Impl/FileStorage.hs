@@ -1,73 +1,30 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}
 
-module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.NewRepository where
+module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.FileStorage
+    (
+    )
+where
 
-import Control.Monad                                (Monad, liftM, liftM2)
-import Control.Monad.Writer                         (MonadWriter, Writer, runWriter, tell)
-import Control.Applicative                          (Applicative)
-import Control.Monad.IO.Class                       (MonadIO)
-import Control.Monad.Trans.Either                   (EitherT, runEitherT, left)
-import Control.Exception                            (throwIO, catch)
-import Data.Functor                                 (Functor)
-import Data.DateTime                                (DateTime)
-import Data.UUID                                    (UUID, nil)
+import CH.ComeBackGloebb.CBGWebSite.Repo.Class      (Repository(..))
+import CH.ComeBackGloebb.CBGWebSite.Repo.Types
+import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils (check)
+
+import Control.Monad.Writer                         (Writer, runWriter, tell)
+import Control.Monad.Trans.Either                   (runEitherT, left)
+import Control.Exception                            (throwIO)
+import Data.UUID                                    (nil)
 import Data.UUID.V4                                 (nextRandom)
 import System.FilePath                              ((</>))
 import System.IO                                    (appendFile)
 import System.Directory                             (createDirectoryIfMissing, doesDirectoryExist, removeDirectoryRecursive, removeFile)
-import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils (check)
 
 
 ------------------------------------------------------------------------------------
 -- Types
 ------------------------------------------------------------------------------------
 
-data Transaction = Transaction { ta_uuid :: UUID
-                               , ta_ops  :: [Operation]
-                               }
-    deriving (Show)
-
-data Node     = Node     { path :: String }
-    deriving (Show)
-
-data Property = Property { prop_name  :: String
-                         , prop_value :: Value
-                         }
-    deriving (Show)
-
-data Value    = StringValue   { string_value   :: String }
-              | IntegerValue  { integer_value  :: Integer }
-              | BooleanValue  { boolean_value  :: Bool }
-              | DateTimeValue { datetime_value :: DateTime }
-    deriving (Show)
-
-data Operation = AddNode Node
-               | RemoveNode Node
-               | AddProperty Node Property
-               | RemoveProperty Node Property
-               | ModifyProperty Node Property
-    deriving (Show)
-
-newtype TransactionContext a = TC { runTC :: Writer [Operation] a }
-    deriving (Monad, Functor, Applicative, MonadWriter [Operation])
-
 data LocalRepository = LocalRepository { localrep_root :: FilePath }
     deriving (Show)
-
-
-------------------------------------------------------------------------------------
--- Classes
-------------------------------------------------------------------------------------
-
-class Monad m => Repository r m | m -> r where
-    r_getTransaction :: TransactionContext a  -> EitherT IOError m Transaction
-    r_logBegin       :: r -> Transaction      -> EitherT IOError m ()
-    r_logEnd         :: r -> Transaction      -> EitherT IOError m ()
-    r_addNode        :: r -> Node             -> EitherT IOError m ()
-    r_removeNode     :: r -> Node             -> EitherT IOError m ()
-    r_addProperty    :: r -> Node -> Property -> EitherT IOError m ()
-    r_removeProperty :: r -> Node -> Property -> EitherT IOError m ()
-    r_modifyProperty :: r -> Node -> Property -> EitherT IOError m ()
 
 
 ------------------------------------------------------------------------------------

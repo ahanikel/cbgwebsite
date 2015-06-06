@@ -1,7 +1,6 @@
 *.hi
 *.o
 *.core
-CBGWebSite
 .cabal-sandbox
 dist
 cabal.sandbox.config
