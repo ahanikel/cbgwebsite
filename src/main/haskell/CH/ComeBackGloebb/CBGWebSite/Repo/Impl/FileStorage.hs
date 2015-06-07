@@ -12,6 +12,7 @@ import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils (check)
 import Control.Monad.Writer                         (Writer, runWriter, tell)
 import Control.Monad.Trans.Either                   (runEitherT, left)
 import Control.Exception                            (throwIO)
+import Data.Hash.MD5                                (md5s)
 import Data.UUID                                    (nil)
 import Data.UUID.V4                                 (nextRandom)
 import System.FilePath                              ((</>))
@@ -25,6 +26,23 @@ import System.Directory                             (createDirectoryIfMissing, d
 
 data LocalRepository = LocalRepository { localrep_root :: FilePath }
     deriving (Show)
+
+
+------------------------------------------------------------------------------------
+-- Helpers
+------------------------------------------------------------------------------------
+
+uuidPath :: Node -> FilePath
+uuidPath node = '/' : a : b : '/' : c : d : '/' : e : f : '/' : u
+    where u@(a : b : c : d : e : f : _)    = show $ uuid node
+
+propValuePath :: Value -> FilePath
+propValuePath value = '/' : a : b : '/' : c : d : '/' : e : f : '/' : hash
+    where hash@(a : b : c : d : e : f : _) = md5s $ show value
+
+propPathPath :: FilePath -> FilePath
+propPathPath path = '/' : a : b : '/' : c : d : '/' : e : f : '/' : hash
+    where hash@(a : b : c : d : e : f : _) = md5s path
 
 
 ------------------------------------------------------------------------------------
@@ -50,28 +68,39 @@ instance Repository LocalRepository IO where
                                                  appendFile localrep_logbegin  $ show trans ++ "\n"
     r_logEnd   repo trans           = check $ do let localrep_logend   = localrep_root repo </> "end.log"
                                                  appendFile localrep_logend    $ show trans ++ "\n"
-    r_addNode        repo node      = check $ do let dir = localrep_root repo ++ path node
-                                                 exists <- doesDirectoryExist dir
-                                                 if exists
-                                                 then throwIO $ userError "node exists already"
-                                                 else createDirectoryIfMissing True dir
-    r_removeNode     repo node      = check $ do let dir = localrep_root repo ++ path node
-                                                 exists <- doesDirectoryExist dir
-                                                 if exists
-                                                 then removeDirectoryRecursive dir
-                                                 else throwIO $ userError "node does not exist"
-    r_addProperty    repo node prop = check $ do let dir = localrep_root repo ++ path node
-                                                     file = dir ++ '/' : prop_name prop
-                                                 exists <- doesDirectoryExist dir
-                                                 if exists
-                                                 then writeFile file $ show $ prop_value prop
-                                                 else throwIO $ userError "node does not exist"
-    r_removeProperty repo node prop = check $ do let dir = localrep_root repo ++ path node
-                                                     file = dir ++ '/' : prop_name prop
-                                                 exists <- doesDirectoryExist dir
-                                                 if exists
+    r_addNode        repo node      = check $ do let uuiddir = localrep_root repo ++ "/uuid" ++ uuidPath node
+                                                 let pathdir = localrep_root repo ++ "/path" ++ propPathPath $ node_path node
+                                                 existsu <- doesDirectoryExist uuiddir
+                                                 when existsu $ throwIO $ userError "node exists already"
+                                                 existsp <- doesDirectoryExist pathdir
+                                                 when existsp $ throwIO $ userError "path exists already"
+                                                 createDirectoryIfMissing True uuiddir
+                                                 writeFile $ uuidDir </> "uuid" $ node_uuid node
+                                                 writeFile $ uuidDir </> "path" $ node_path node
+                                                 createDirectoryIfMissing True pathdir
+                                                 writeFile $ pathDir </> (show $ node_uuid node) $ node_path node
+    r_removeNode     repo node      = undefined
+    r_addProperty    repo node prop = check $ do let uuiddir  = localrep_root repo ++ "/uuid" ++ uuidPath node
+                                                     pathdir  = localrep_root repo </> prop_name prop ++ propPathPath $ node_path node
+                                                     uuidFile = uuiddir </> prop_name prop
+                                                     pathFile = pathdir </> show $ node_uuid node
+                                                 existsu  <- doesDirectoryExist uuiddir
+                                                 when  not existsu $ throwIO $ userError "node does not exist"
+                                                 writeFile uuidFile $ show $ prop_value prop
+                                                 writeFile pathFile $ show $ prop_value prop
+    r_removeProperty repo node prop = check $ do let uuiddir  = localrep_root repo ++ "/uuid" ++ uuidPath node
+                                                     pathdir  = localrep_root repo </> prop_name prop ++ propPathPath $ node_path node
+                                                     uuidFile = uuiddir </> prop_name prop
+                                                     pathFile = pathdir </> show $ node_uuid node
+                                                 existsu  <- doesDirectoryExist uuiddir
+                                                 when not existsu $ throwIO $ userError "node does not exist"
+                                                 existsuf <- doesFileExist uuidFile
+                                                 when not existsuf $ throwIO $ userError "property does not exist"
+                                                 existsp  <- doesDirectoryExist pathdir
+                                                 existspf <- doesFileExist pathFile
+                                                 if   existsp and existspf
                                                  then removeFile file
-                                                 else throwIO $ userError "node does not exist"
+                                                 else return ()
     r_modifyProperty                = r_addProperty -- for now...
 
 data FakeRepository = FakeRepository
