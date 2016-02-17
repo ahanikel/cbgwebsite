@@ -9,14 +9,14 @@ import Data.Functor                                 (Functor)
 import Data.DateTime                                (DateTime)
 import Data.UUID                                    (UUID)
 
-newtype PathComponent = String
+newtype PathComponent = PathComponent String
     deriving (Show)
 
-type URL = [PathComponent]
+type URL      = [PathComponent]
 
-newtype Node     = Node     { node_uuid :: UUID
-                            , node_path :: FilePath
-                            }
+data Node     = Node { node_uuid :: UUID
+                     , node_path :: FilePath
+                     }
     deriving (Show)
 
 data Property = Property { prop_name  :: String
