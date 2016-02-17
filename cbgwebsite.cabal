@@ -33,6 +33,7 @@ Executable CBGWebSite
                , datetime
                , uuid
                , transformers
+               , MissingH
   Hs-Source-Dirs: src/main/haskell
 
 test-suite test
