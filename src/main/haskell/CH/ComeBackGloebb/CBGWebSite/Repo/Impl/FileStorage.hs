@@ -1,24 +1,25 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}
 
 module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.FileStorage
-    (
-    )
+    --( test_runTransaction
+    --, test_doSomething
+    --)
 where
 
 import CH.ComeBackGloebb.CBGWebSite.Repo.Class      (Repository(..))
 import CH.ComeBackGloebb.CBGWebSite.Repo.Types
 import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils (check)
 
-import Control.Monad                                (when)
+import Control.Monad                                (when, filterM)
 import Control.Monad.Writer                         (Writer, runWriter, tell)
 import Control.Monad.Trans.Either                   (runEitherT, left)
 import Control.Exception                            (throwIO)
 import Data.Hash.MD5                                (md5s, Str(..))
-import Data.UUID                                    (nil)
+import Data.UUID                                    (nil, fromString)
 import Data.UUID.V4                                 (nextRandom)
 import System.FilePath                              ((</>))
 import System.IO                                    (appendFile)
-import System.Directory                             (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeDirectoryRecursive, removeFile)
+import System.Directory                             (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeDirectoryRecursive, removeFile, getDirectoryContents)
 
 
 ------------------------------------------------------------------------------------
@@ -54,6 +55,7 @@ instance Repository FakeRepository TransactionContext where
     r_getTransaction tc             = left $ userError "r_getTransaction not implemented"
     r_logBegin       repo trans     = left $ userError "r_logBegin not implemented"
     r_logEnd         repo trans     = left $ userError "r_logEnd not implemented"
+    r_getNode        repo path      = left $ userError "r_getNode not implemented"
     r_addNode        repo node      = tell [AddNode        node]
     r_removeNode     repo node      = tell [RemoveNode     node]
     r_addProperty    repo node prop = tell [AddProperty    node prop]
@@ -69,6 +71,16 @@ instance Repository LocalRepository IO where
                                                  appendFile localrep_logbegin  $ show trans ++ "\n"
     r_logEnd   repo trans           = check $ do let localrep_logend   = localrep_root repo </> "end.log"
                                                  appendFile localrep_logend    $ show trans ++ "\n"
+    r_getNode        repo path      = check $ do let pathdir     = localrep_root repo ++ "/path" ++ propPathPath path
+                                                 entries        <- getDirectoryContents pathdir
+                                                                   >>= mapM (\e -> return (e, (pathdir </> e)))
+                                                                   >>= filterM (\(_, f) -> doesFileExist f)
+                                                                   >>= filterM (\(_, f) -> readFile f >>= (\p -> return $ p == path))
+                                                 case entries of
+                                                   [(entry,_)] -> do
+                                                     let (Just uuid) = fromString entry
+                                                     return $ Node uuid path
+                                                   otherwise -> fail "Node not found"
     r_addNode        repo node      = check $ do let uuiddir = localrep_root repo ++ "/uuid" ++ uuidPath node
                                                  let pathdir = localrep_root repo ++ "/path" ++ (propPathPath $ node_path node)
                                                  existsu <- doesDirectoryExist uuiddir
@@ -81,6 +93,13 @@ instance Repository LocalRepository IO where
                                                  createDirectoryIfMissing True pathdir
                                                  writeFile (pathdir </> (show $ node_uuid node)) (node_path node)
     r_removeNode     repo node      = undefined
+--     r_removeNode     repo node      = check $ do n <- r_getNode repo (node_path node)
+--                                                  children <- findChildren n
+--                                                  mapM_ (r_removeNode repo) children
+--                                                  let uuiddir = localrep_root repo ++ "/uuid" ++ uuidPath n
+--                                                  let pathdir = localrep_root repo ++ "/path" ++ (propPathPath $ node_path n)
+--                                                  remove pathdir
+--                                                  remove uuiddir
     r_addProperty    repo node prop = check $ do let uuiddir  = localrep_root repo ++ "/uuid" ++ uuidPath node
                                                      pathdir  = localrep_root repo </> prop_name prop ++ (propPathPath $ node_path node)
                                                      uuidFile = uuiddir </> prop_name prop
@@ -110,6 +129,7 @@ instance Repository FakeRepository (Writer [String]) where
     r_getTransaction                = return . Transaction nil . snd . runWriter . runTC
     r_logBegin repo trans           = tell ["r_logBegin "       ++ show trans]
     r_logEnd repo trans             = tell ["r_logEnd "         ++ show trans]
+    r_getNode        repo path      = tell ["r_getNode "        ++ show path] >> (return $ Node nil path)
     r_addNode        repo node      = tell ["r_addNode "        ++ show node]
     r_removeNode     repo node      = tell ["r_removeNode "     ++ show node]
     r_addProperty    repo node prop = tell ["r_addProperty "    ++ show node ++ " " ++ show prop]
@@ -129,7 +149,7 @@ runTransaction repo tc = runEitherT $ do trans <- r_getTransaction tc
                                   ModifyProperty node prop -> r_modifyProperty repo node prop
 
 doSomething :: TransactionContext ()
-doSomething = do _ <- runEitherT $ do r_removeNode  FakeRepository node
+doSomething = do _ <- runEitherT $ do --r_removeNode  FakeRepository node
                                       r_addNode     FakeRepository node
                                       r_addProperty FakeRepository node property
                  return ()
