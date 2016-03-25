@@ -8,7 +8,7 @@ import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
 import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 
 -- Yesod
-import Yesod
+import Yesod hiding (deleteBy, joinPath)
 import Yesod.Static
 import Text.Hamlet
 import Yesod.Auth
@@ -21,7 +21,6 @@ import Network.HTTP.Types (status200)
 import Control.Concurrent (MVar, newMVar)
 import Data.Text (Text, unpack, pack)
 import qualified Data.Text as T
-import Text.Pandoc (readMarkdown, writeHtml)
 import Control.Monad (filterM, liftM)
 import Data.List (intercalate)
 import Control.Exception (IOException)
@@ -32,6 +31,9 @@ import Debug.Trace
 import Data.Maybe (fromMaybe)
 import Control.Applicative ((<$>), (<*>))
 import Data.DateTime
+import Control.Exception.Base (throwIO)
+import Data.List (deleteBy)
+import System.FilePath (joinPath)
 
 staticFiles "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static"
 
@@ -50,6 +52,7 @@ mkYesod "CBGWebSite" [parseRoutes|
     /auth                            AuthR                 Auth            getAuth
     /members                         MembersR              GET
     /content/+ContentPath            ContentR              GET
+    /edit/content/+ContentPath       EditContentR          GET POST
     /members/calendar/#Int/#Int      MemberCalendarR       GET
     /members/event/edit/#Text        EventR                GET POST
     /members/list                    MemberListR           GET
@@ -57,8 +60,8 @@ mkYesod "CBGWebSite" [parseRoutes|
 |]
 
 instance Yesod CBGWebSite where
-    defaultLayout                          = cbgLayout
-    approot                                = ApprootStatic ""
+    defaultLayout                            = cbgLayout
+    approot                                  = ApprootStatic ""
     -- isAuthorized route isWriteRequest? = ...
     isAuthorized RootR                 False = return Authorized
     isAuthorized FavR                  False = return Authorized
@@ -72,8 +75,9 @@ instance Yesod CBGWebSite where
       case authUser of
         Just userName | userName `has` Read `On` Members -> return Authorized
         _                                                -> return $ Unauthorized ""
-    isAuthorized (ContentR _)  False       = return Authorized
-    isAuthorized _             _           = return $ Unauthorized ""
+    isAuthorized (ContentR _)          False = return Authorized
+    isAuthorized (EditContentR _)      _     = return Authorized
+    isAuthorized _                     _     = return $ Unauthorized ""
 
 instance RenderMessage CBGWebSite FormMessage where
     renderMessage _ _ = defaultFormMessage
@@ -97,7 +101,10 @@ cbgLayout widget = do pageContent  <- widgetToPageContent widget
                       maybeAuthId  <- maybeAuthId
                       req          <- getRequest
                       let path     =  map unpack $ pathInfo $ reqWaiRequest req
-                      let repoPath =  tail path
+                      let repoPath =  case path of
+                                          ("content" : rest)          -> rest
+                                          ("edit" : "content" : rest) -> rest
+                                          _                           -> path
                       app          <- getYesod
                       eitherNode   <- liftIO $ runEitherT (getNode (contentRepo app) repoPath)
                       navi         <- widgetToPageContent $ either emptyWidget navigationWidget eitherNode
@@ -107,7 +114,7 @@ cbgLayout widget = do pageContent  <- widgetToPageContent widget
 withJQuery :: Widget -> Widget
 withJQuery widget = do
     toWidgetHead [hamlet|
-        <script src=//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js>
+        <script src=//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js>
         <script src=@{StaticR jquery_blockUI_js}>
     |]
     widget
@@ -123,6 +130,62 @@ withAngularController controller widget = do
     toWidgetHead [hamlet|
         <script src=//ajax.googleapis.com/ajax/libs/angularjs/1.2.24/angular.min.js>
         <script src=#{controllerjs}>
+    |]
+
+withCKEditor :: Widget -> Widget
+withCKEditor widget = do
+    [whamlet|
+        <form #editorform method=post>
+            <div #buttons>
+                <button #savebutton type=button .btn .btn-lg .btn-primary>Save
+            <textarea #ckeditor name=body>
+                ^{widget}
+        <script>
+            CKEDITOR.replace('ckeditor');
+            function restoreSaveButton() {
+                \$('#savebutton').removeClass('btn-success')
+                                .removeClass('btn-danger')
+                                .addClass('btn-primary')
+                                .text('Save');
+            }
+            function successSaveButton() {
+                \$('#savebutton').removeClass('btn-primary')
+                                .removeClass('btn-danger')
+                                .addClass('btn-success')
+                                .text('Saved!')
+                                .delay(5000);
+                restoreSaveButton();
+            }
+            function errorSaveButton() {
+                \$('#savebutton').removeClass('btn-success')
+                                .removeClass('btn-primary')
+                                .addClass('btn-danger')
+                                .text('Error while saving! Retry?')
+                                .delay(5000);
+                restoreSaveButton();
+            }
+            \$('#savebutton').click(function(event) {
+                \$.post('#', $('#editorform').serialize(), function(ret) {})
+                .success(successSaveButton)
+                .error(errorSaveButton);
+            });
+    |]
+    toWidgetHead [hamlet|
+        <script src=//cdn.ckeditor.com/4.5.7/standard/ckeditor.js>
+    |]
+
+withBootstrap :: Widget -> Widget
+withBootstrap widget = do
+    withJQuery widget
+    toWidgetHead [hamlet|
+        <!-- Latest compiled and minified CSS -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+
+        <!-- Optional theme -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+
+        <!-- Latest compiled and minified JavaScript -->
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous">
     |]
 
 getRootR :: Handler ()
@@ -141,6 +204,42 @@ instance PathMultiPiece ContentPath where
     toPathMultiPiece (ContentPath pieces) = pieces
     fromPathMultiPiece = Just . ContentPath . filter (/= "..")
 
+getEditContentR :: ContentPath -> Handler Html
+getEditContentR (ContentPath pieces) = defaultLayout $ withCKEditor $ withBootstrap $ do
+    app <- getYesod
+    eitherNode <- liftIO $ runEitherT $ do
+        let url = map unpack pieces
+        node <- getNode (contentRepo app) $ trace (show url) url
+        return node
+    case eitherNode of
+        Left ioe -> notFound
+        Right node | node_path node == [] -> redirect ("/content/welcome" :: String)
+        Right node -> do
+            let prop = case getProperty node "text.html" of
+                           Just p  -> show $ prop_value p
+                           Nothing -> ""
+            toWidget $ toHtml prop
+    
+postEditContentR :: ContentPath -> Handler Html
+postEditContentR (ContentPath pieces) = do
+    app <- getYesod
+    eitherNode <- liftIO $ runEitherT $ do
+        let url = map unpack pieces
+        node <- getNode (contentRepo app) $ trace (show url) url
+        return node
+    case eitherNode of
+        Left ioe -> notFound
+        Right node | node_path node == [] -> notFound
+        Right node -> do
+          let props   = node_props node
+              props'  = deleteBy (\ (Property a _) (Property b _) -> a == b) (Property "text.html" (StringValue "")) props
+          body <- runInputPost $ ireq textField "body"
+          let props'' = Property "text.html" (StringValue $ unpack body) : props
+          result <- liftIO $ runEitherT $ writeNode $ node { node_props = props'' }
+          case result of
+            Left ioe -> liftIO $ throwIO ioe
+            Right _  -> redirect $ joinPath ("/" : (map unpack pieces))
+ 
 getContentR :: ContentPath -> Handler Html
 getContentR (ContentPath pieces) = defaultLayout $ do
     app <- getYesod
@@ -152,10 +251,10 @@ getContentR (ContentPath pieces) = defaultLayout $ do
         Left ioe -> notFound
         Right node | node_path node == [] -> redirect ("/content/welcome" :: String)
         Right node -> do
-            let prop = case getProperty node "text.md" of
+            let prop = case getProperty node "text.html" of
                            Just p  -> show $ prop_value p
                            Nothing -> ""
-            toWidget $ writeHtml def $ readMarkdown def prop
+            toWidget $ preEscapedToMarkup prop
 
 navigationWidget :: Node -> Widget
 navigationWidget node = do eitherNodes <- liftIO $ runEitherT $ do
@@ -266,7 +365,7 @@ getMemberCalendarR year month = if month < 1 || month > 12
                     <tr>
                         <td>#{toSqlString $ ev_startDate   event}
                         <td>#{toSqlString $ ev_endDate     event}
-                        <td>^{renderDesc  $ ev_description event}
+                        <td>^{toHtml      $ ev_description event}
                         <td>
                             <a href=@{EventR $ eventId event}>
                                 <button>Edit
@@ -283,7 +382,6 @@ getMemberCalendarR year month = if month < 1 || month > 12
         url = map (pathCompFromString . show) [year, month]
         getEventList :: Node -> RepositoryContext [Event]
         getEventList node = getChildNodes node >>= return . (map fromNode)
-        renderDesc desc = writeHtml def $ readMarkdown def $ unpack desc
         eventId event = pack $ intercalate "/" [show year, show month, toSqlString $ ev_startDate event]
             where (year, month, _) = toGregorian' $ ev_startDate event
 
