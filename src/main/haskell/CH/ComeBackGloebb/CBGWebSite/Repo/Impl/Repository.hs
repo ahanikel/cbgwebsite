@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     ( Repository (..)
     , openRepository
@@ -101,7 +103,7 @@ data Property = Property { prop_name :: String
 -- exported
 data Node = Node { node_name        :: String
                  , node_path        :: URL
-                 , node_props       :: [Property]
+                 , node_props       :: ![Property]
                  , node_repo        :: Repository
                  }
     deriving (Read, Show, Eq)
@@ -135,6 +137,7 @@ getNode repo url = do let name       = case url of [] -> "/"
                                                    _  -> last url
                           filePath   = root repo </> urlToFilePath url
                       props <- check (readProperties filePath)
+                      check $ putStrLn $ show props
                       return $ Node name url props repo
 
 --exported
