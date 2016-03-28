@@ -132,16 +132,31 @@ withAngularController controller widget = do
         <script src=#{controllerjs}>
     |]
 
+withTinyMCE :: Widget -> Widget
+withTinyMCE widget = do
+    [whamlet|
+        <textarea #body name=body>
+            ^{widget}
+    |]
+    toWidgetHead [hamlet|
+        <script src=//cdn.tinymce.com/4/tinymce.min.js>
+        <script>
+            tinymce.init({ selector:'textarea' });
+    |]
+
+--        <form #editorform action=# method=post>
+
 withCKEditor :: Widget -> Widget
 withCKEditor widget = do
     [whamlet|
-        <form #editorform method=post>
-            <div #buttons>
-                <button #savebutton type=button .btn .btn-lg .btn-primary>Save
-            <textarea #ckeditor name=body>
-                ^{widget}
+        <div #buttons>
+            <button #savebutton type=button .btn .btn-lg .btn-primary>
+                Save
+
+        <textarea #body name=body>
+            ^{widget}
         <script>
-            CKEDITOR.replace('ckeditor');
+            CKEDITOR.replace('body');
             function restoreSaveButton() {
                 \$('#savebutton').removeClass('btn-success')
                                 .removeClass('btn-danger')
@@ -152,20 +167,18 @@ withCKEditor widget = do
                 \$('#savebutton').removeClass('btn-primary')
                                 .removeClass('btn-danger')
                                 .addClass('btn-success')
-                                .text('Saved!')
-                                .delay(5000);
-                restoreSaveButton();
+                                .text('Saved!');
+                window.setTimeout(restoreSaveButton, 5000);
             }
             function errorSaveButton() {
                 \$('#savebutton').removeClass('btn-success')
                                 .removeClass('btn-primary')
                                 .addClass('btn-danger')
-                                .text('Error while saving! Retry?')
-                                .delay(5000);
-                restoreSaveButton();
+                                .text('Error while saving! Retry?');
+                window.setTimeout(restoreSaveButton, 5000);
             }
             \$('#savebutton').click(function(event) {
-                \$.post('#', $('#editorform').serialize(), function(ret) {})
+                \$.post('#', { body: CKEDITOR.instances.body.getData() }, function(ret) {})
                 .success(successSaveButton)
                 .error(errorSaveButton);
             });
@@ -234,11 +247,12 @@ postEditContentR (ContentPath pieces) = do
           let props   = node_props node
               props'  = deleteBy (\ (Property a _) (Property b _) -> a == b) (Property "text.html" (StringValue "")) props
           body <- runInputPost $ ireq textField "body"
-          let props'' = Property "text.html" (StringValue $ unpack body) : props
+          let props'' = Property "text.html" (StringValue $ unpack body) : props'
           result <- liftIO $ runEitherT $ writeNode $ node { node_props = props'' }
           case result of
             Left ioe -> liftIO $ throwIO ioe
-            Right _  -> redirect $ joinPath ("/" : (map unpack pieces))
+            --Right _  -> redirect $ joinPath ("/content/" : (map unpack pieces))
+            Right _ -> withUrlRenderer [hamlet||]
  
 getContentR :: ContentPath -> Handler Html
 getContentR (ContentPath pieces) = defaultLayout $ do
