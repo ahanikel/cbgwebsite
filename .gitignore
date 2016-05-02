@@ -7,3 +7,6 @@ cabal.sandbox.config
 client_session_key.aes
 static
 .stack-work
+google*
+content
+data

@@ -12,7 +12,7 @@ import Yesod hiding (deleteBy, joinPath)
 import Yesod.Static
 import Text.Hamlet
 import Yesod.Auth
-import Yesod.Auth.BrowserId
+import Yesod.Auth.GoogleEmail2
 import Network.HTTP.Conduit (Manager, conduitManagerSettings, newManager)
 import Network.Wai (pathInfo, responseLBS)
 import Network.HTTP.Types (status200)
@@ -43,6 +43,8 @@ data CBGWebSite = CBGWebSite { getStatic    :: Static
                              , contentRepo  :: Repository
                              , memberRepo   :: Repository
                              , calendarRepo :: Repository
+                             , clientId     :: Text
+                             , clientSecret :: Text
                              }
 
 mkYesod "CBGWebSite" [parseRoutes|
@@ -61,7 +63,7 @@ mkYesod "CBGWebSite" [parseRoutes|
 
 instance Yesod CBGWebSite where
     defaultLayout                            = cbgLayout
-    approot                                  = ApprootStatic ""
+    approot                                  = ApprootStatic "http://localhost:8080"
     -- isAuthorized route isWriteRequest? = ...
     isAuthorized RootR                 False = return Authorized
     isAuthorized FavR                  False = return Authorized
@@ -87,7 +89,7 @@ instance YesodAuth CBGWebSite where
     getAuthId                        = return . Just . credsIdent
     loginDest _                      = MembersR
     logoutDest _                     = MembersR
-    authPlugins _                    = [ authBrowserId def ]
+    authPlugins                      = \self -> [ authGoogleEmail (clientId self) (clientSecret self) ]
     authHttpManager                  = httpManager
     maybeAuthId                      = lookupSession "_ID"
 
