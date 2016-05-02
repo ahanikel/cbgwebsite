@@ -19,7 +19,7 @@ main = do sem            <- newMVar True
           warp 8080 $
             CBGWebSite staticSettings sem manager
                 (Repository "content")
-                (Repository "members/list")
+                (Repository "data/members")
                 (Repository "members/calendar")
                 (pack clientId)
                 (pack clientSecret)

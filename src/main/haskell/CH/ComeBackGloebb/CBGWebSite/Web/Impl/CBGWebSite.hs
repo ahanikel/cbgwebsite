@@ -68,15 +68,29 @@ instance Yesod CBGWebSite where
     isAuthorized RootR                 False = return Authorized
     isAuthorized FavR                  False = return Authorized
     isAuthorized (AuthR _)             _     = return Authorized
-    isAuthorized (MemberCalendarR _ _) False = return Authorized
-    isAuthorized (EventR _)            _     = return Authorized
-    isAuthorized MemberListR           False = return Authorized
-    isAuthorized (MemberR _)           _     = return Authorized
+    isAuthorized (MemberCalendarR _ _) False = return $ Unauthorized ""
+    isAuthorized (EventR _)            _     = return $ Unauthorized ""
+
+    isAuthorized MemberListR           False = do
+      authUser <- maybeAuthId
+      case authUser of
+        Just userName | userName `has` Read  `On` MemberList -> return Authorized
+        _                                                    -> return $ Unauthorized ""
+
+    isAuthorized MemberListR           True  = do
+      authUser <- maybeAuthId
+      case authUser of
+        Just userName | userName `has` Write `On` MemberList -> return Authorized
+        _                                                    -> return $ Unauthorized ""
+
+    isAuthorized (MemberR _)           w     = isAuthorized MemberListR w
+
     isAuthorized MembersR              False = do
       authUser <- maybeAuthId
       case authUser of
-        Just userName | userName `has` Read `On` Members -> return Authorized
-        _                                                -> return $ Unauthorized ""
+        Just userName | userName `has` Read  `On` Members -> return Authorized
+        _                                                 -> return $ Unauthorized ""
+
     isAuthorized (ContentR _)          False = return Authorized
     isAuthorized (EditContentR _)      _     = return Authorized
     isAuthorized _                     _     = return $ Unauthorized ""
@@ -473,40 +487,63 @@ postEventR name = do
 --- Member List
 ------------------------------------------------------------------------------------------
 
-data Member = Member { vorname :: Text
-                     , name    :: Text
-                     , strasse :: Text
-                     , ort     :: Text
+-- TODO: Template Haskell was probably invented for this kind of boilerplate stuff...
+
+data Member = Member { firstname :: Text
+                     , name      :: Text
+                     , address   :: Maybe Text
+                     , locality  :: Maybe Text
+                     , status    :: Text
+                     , phone     :: Maybe Text
+                     , mobile    :: Maybe Text
+                     , email     :: Maybe Text
                      } deriving (Show)
 
 instance ToJSON Member where
-    toJSON Member {..} = object [ "name"     .= name
-                                , "vorname"  .= vorname
-                                , "strasse"  .= strasse
-                                , "ort"      .= ort
+    toJSON Member {..} = object ["firstname"  .= firstname
+                                ,"name"       .= name
+                                ,"address"    .= address
+                                ,"locality"   .= locality
+                                ,"status"     .= status
+                                ,"phone"      .= phone
+                                ,"mobile"     .= mobile
+                                ,"email"      .= email
                                 ]
 
 instance Persistent Member where
-    fromNode node = Member (property "firstname")
-                           (property "lastname")
-                           (property "address")
-                           (property "city")
-      where property = pack . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
+    fromNode node = Member (req_property "firstname")
+                           (req_property "name")
+                           (opt_property "address")
+                           (opt_property "locality")
+                           (req_property "status")
+                           (opt_property "phone")
+                           (opt_property "mobile")
+                           (opt_property "email")
+      where req_property = pack . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
+            opt_property pname = (pack . show) <$> (liftM prop_value $ getProperty node pname)
     toNode repo memberName member = Node memberName
                                          (urlFromString memberName)
-                                         [ (Property "firstname" $ StringValue $ unpack $ vorname member)
-                                         , (Property "lastname"  $ StringValue $ unpack $ name member)
-                                         , (Property "address"   $ StringValue $ unpack $ strasse member)
-                                         , (Property "city"      $ StringValue $ unpack $ ort member)
+                                         [ (Property "firstname" $ StringValue $ unpack $                firstname member)
+                                         , (Property "name"      $ StringValue $ unpack $                name      member)
+                                         , (Property "address"   $ StringValue $ unpack $ fromMaybe "" $ address   member)
+                                         , (Property "locality"  $ StringValue $ unpack $ fromMaybe "" $ locality  member)
+                                         , (Property "status"    $ StringValue $ unpack $                status    member)
+                                         , (Property "phone"     $ StringValue $ unpack $ fromMaybe "" $ phone     member)
+                                         , (Property "mobile"    $ StringValue $ unpack $ fromMaybe "" $ mobile    member)
+                                         , (Property "email"     $ StringValue $ unpack $ fromMaybe "" $ email     member)
                                          ]
                                          repo
 
 memberForm :: Maybe Member -> Html -> MForm Handler (FormResult Member, Widget)
 memberForm mmember = renderDivs $ Member
-    <$> areq textField "Vorname" (vorname <$> mmember)
-    <*> areq textField "Name"    (name    <$> mmember)
-    <*> areq textField "Strasse" (strasse <$> mmember)
-    <*> areq textField "Ort"     (ort     <$> mmember)
+    <$> areq textField "Vorname" (firstname <$> mmember)
+    <*> areq textField "Name"    (name      <$> mmember)
+    <*> aopt textField "Strasse" (address   <$> mmember)
+    <*> aopt textField "Ort"     (locality  <$> mmember)
+    <*> areq textField "Status"  (status    <$> mmember)
+    <*> aopt textField "Telefon" (phone     <$> mmember)
+    <*> aopt textField "Mobile"  (mobile    <$> mmember)
+    <*> aopt textField "E-Mail"  (email     <$> mmember)
 
 getMemberR :: Text -> Handler Html
 getMemberR name = do app               <- getYesod
@@ -547,12 +584,20 @@ getMemberListR = selectRep $ do
                             <th>Name
                             <th>Strasse
                             <th>Ort
+                            <th>Status
+                            <th>Telefon
+                            <th>Mobile
+                            <th>E-Mail
                         $forall member <- members
                             <tr>
-                                <td>#{vorname member}
-                                <td>#{name member}
-                                <td>#{strasse member}
-                                <td>#{ort member}
+                                <td>#{               firstname member}
+                                <td>#{               name      member}
+                                <td>#{fromMaybe "" $ address   member}
+                                <td>#{fromMaybe "" $ locality  member}
+                                <td>#{               status    member}
+                                <td>#{fromMaybe "" $ phone     member}
+                                <td>#{fromMaybe "" $ mobile    member}
+                                <td>#{fromMaybe "" $ email     member}
                                 <td>
                                     <a href=@{MemberR $ memberId member}>
                                         <button>Edit
@@ -566,6 +611,6 @@ getMemberListR = selectRep $ do
                   Left  e       -> do $logError $ pack $ show e
                                       as ([] :: [Member])
                   Right members -> as members
-        memberId member = T.concat [vorname member, (pack " "), name member]
+        memberId member = T.concat [name member, (pack " "), firstname member]
         getMemberList :: Node -> RepositoryContext [Member]
         getMemberList node = getChildNodes node >>= return . (map fromNode)
