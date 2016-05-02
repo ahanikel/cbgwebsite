@@ -146,43 +146,14 @@ withTinyMCE widget = do
 
 --        <form #editorform action=# method=post>
 
-withCKEditor :: Widget -> Widget
-withCKEditor widget = do
+ckEditor :: Widget -> Widget
+ckEditor widget = do
     [whamlet|
-        <div #buttons>
-            <button #savebutton type=button .btn .btn-lg .btn-primary>
-                Save
-
         <textarea #body name=body>
             ^{widget}
         <script>
             CKEDITOR.replace('body');
-            function restoreSaveButton() {
-                \$('#savebutton').removeClass('btn-success')
-                                .removeClass('btn-danger')
-                                .addClass('btn-primary')
-                                .text('Save');
-            }
-            function successSaveButton() {
-                \$('#savebutton').removeClass('btn-primary')
-                                .removeClass('btn-danger')
-                                .addClass('btn-success')
-                                .text('Saved!');
-                window.setTimeout(restoreSaveButton, 5000);
-            }
-            function errorSaveButton() {
-                \$('#savebutton').removeClass('btn-success')
-                                .removeClass('btn-primary')
-                                .addClass('btn-danger')
-                                .text('Error while saving! Retry?');
-                window.setTimeout(restoreSaveButton, 5000);
-            }
-            \$('#savebutton').click(function(event) {
-                \$.post('#', { body: CKEDITOR.instances.body.getData() }, function(ret) {})
-                .success(successSaveButton)
-                .error(errorSaveButton);
-            });
-    |]
+   |]
     toWidgetHead [hamlet|
         <script src=//cdn.ckeditor.com/4.5.7/standard/ckeditor.js>
     |]
@@ -201,6 +172,55 @@ withBootstrap widget = do
         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous">
     |]
 
+editPage :: Widget -> Widget
+editPage contentBody = [whamlet|
+    <div #buttons>
+        <button #savebutton type=button .btn .btn-lg .btn-primary>
+            Save
+    <script>
+        function restoreSaveButton() {
+            \$('#savebutton').removeClass('btn-success')
+                            .removeClass('btn-danger')
+                            .addClass('btn-primary')
+                            .text('Save');
+        }
+        function successSaveButton() {
+            \$('#savebutton').removeClass('btn-primary')
+                            .removeClass('btn-danger')
+                            .addClass('btn-success')
+                            .text('Saved!');
+            window.setTimeout(restoreSaveButton, 5000);
+        }
+        function errorSaveButton() {
+            \$('#savebutton').removeClass('btn-success')
+                            .removeClass('btn-primary')
+                            .addClass('btn-danger')
+                            .text('Error while saving! Retry?');
+            window.setTimeout(restoreSaveButton, 5000);
+        }
+        \$('#savebutton').click(function(event) {
+            \$.post('#', { body: CKEDITOR.instances.body.getData() }, function(ret) {})
+            .success(successSaveButton)
+            .error(errorSaveButton);
+        });
+    <div>
+        <ul .nav .nav-tabs role=tablist>
+            <li role=presentation .active>
+                <a href=#content aria-controls=content role=tab data-toggle=tab>Content
+            <li role=presentation>
+                <a href=#properties aria-controls=properties role=tab data-toggle=tab>Properties
+            <li role=presentation>
+                <a href=#permissions aria-controls=permissions role=tab data-toggle=tab>Permissions
+        <div .tab-content>
+            <div role=tabpanel .tab-pane .active id=content>
+                ^{ckEditor contentBody}
+            <div role=tabpanel .tab-pane .active id=properties>...
+            <div role=tabpanel .tab-pane .active id=permissions>...
+    |]
+
+editLayout :: Widget -> Handler Html
+editLayout = defaultLayout . withBootstrap . editPage
+
 getRootR :: Handler ()
 getRootR = redirect ("/content/welcome" :: String)
 
@@ -218,20 +238,27 @@ instance PathMultiPiece ContentPath where
     fromPathMultiPiece = Just . ContentPath . filter (/= "..")
 
 getEditContentR :: ContentPath -> Handler Html
-getEditContentR (ContentPath pieces) = defaultLayout $ withCKEditor $ withBootstrap $ do
+getEditContentR (ContentPath pieces) = do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
         node <- getNode (contentRepo app) $ trace (show url) url
         return node
-    case eitherNode of
+    (prop, title) <- case eitherNode of
         Left ioe -> notFound
         Right node | node_path node == [] -> redirect ("/content/welcome" :: String)
         Right node -> do
-            let prop = case getProperty node "text.html" of
-                           Just p  -> show $ prop_value p
-                           Nothing -> ""
-            toWidget $ toHtml prop
+            let prop  = case getProperty node "text.html" of
+                             Just p  -> show $ prop_value p
+                             Nothing -> ""
+            let title = case getProperty node "title" of
+                             Just p  -> show $ prop_value p
+                             Nothing -> ""
+            return (prop, title)
+    let contentBody = toWidget $ toHtml prop
+    -- let propertiesWidget = 
+    -- let permissionsWidget = 
+    editLayout contentBody
     
 postEditContentR :: ContentPath -> Handler Html
 postEditContentR (ContentPath pieces) = do
