@@ -172,8 +172,6 @@ withTinyMCE widget = do
             tinymce.init({ selector:'textarea' });
     |]
 
---        <form #editorform action=# method=post>
-
 ckEditor :: Widget -> Widget
 ckEditor widget = do
     [whamlet|
@@ -394,29 +392,38 @@ auditTrail node = do eitherNodes <- liftIO $ runEitherT getTrail
 --- Member Calendar
 ------------------------------------------------------------------------------------------
 
-data Event = Event { ev_startDate   :: DateTime
-                   , ev_endDate     :: DateTime
-                   , ev_description :: Text
+data Event = Event { ev_title       :: Text
+                   , ev_startDate   :: DateTime
+                   , ev_endDate     :: Maybe DateTime
+                   , ev_description :: Maybe Text
+                   , ev_location    :: Maybe Text
                    } deriving (Show)
 
 instance Persistent Event where
-    fromNode node = Event (dateProperty "startDate")
+
+    fromNode node = Event (pack $ node_name node)
+                          (fromMaybe startOfTime $ dateProperty "startDate")
                           (dateProperty "endDate")
                           (textProperty "description")
-      where textProperty =                         pack          . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node -- we should be throwing here in case of error
-            dateProperty = fromMaybe startOfTime . fromSqlString . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node -- we should be throwing here in case of error
+                          (textProperty "location")
+      where textProperty p = pack <$> show <$> prop_value <$> getProperty node p
+            dateProperty = fromSqlString . show . fromMaybe (StringValue "") . fmap prop_value . getProperty node
+
     toNode repo eventName event = Node eventName
                                          (urlFromString eventName)
-                                         [ (Property "startDate"   $ StringValue $ toSqlString $ ev_startDate   event)
-                                         , (Property "endDate"     $ StringValue $ toSqlString $ ev_endDate     event)
-                                         , (Property "description" $ StringValue $ unpack      $ ev_description event)
+                                         [ (Property "startDate"   $ StringValue $ toSqlString  $                    ev_startDate   event)
+                                         , (Property "endDate"     $ StringValue $ fromMaybe "" $ fmap toSqlString $ ev_endDate     event)
+                                         , (Property "description" $ StringValue $ unpack       $ fromMaybe ""     $ ev_description event)
+                                         , (Property "location"    $ StringValue $ unpack       $ fromMaybe ""     $ ev_location    event)
                                          ]
                                          repo
 
 instance ToJSON Event where
-    toJSON Event {..} = object [ "startDate"   .= toSqlString ev_startDate
-                               , "endDate"     .= toSqlString ev_endDate
-                               , "description" .=             ev_description
+    toJSON Event {..} = object [ "title"       .=                               ev_title
+                               , "startDate"   .=               toSqlString     ev_startDate
+                               , "endDate"     .= fromMaybe "" (toSqlString <$> ev_endDate)
+                               , "description" .= fromMaybe ""                  ev_description
+                               , "location"    .= fromMaybe ""                  ev_location
                                ]
 
 getMemberCalendarR :: Int -> Int -> Handler TypedContent
@@ -429,12 +436,16 @@ getMemberCalendarR year month = if month < 1 || month > 12
                 <tr>
                     <th>Startdatum
                     <th>Enddatum
+                    <th>Titel
+                    <th>Ort
                     <th>Beschreibung
                 $forall event <- events
                     <tr>
-                        <td>#{toSqlString $ ev_startDate   event}
-                        <td>#{toSqlString $ ev_endDate     event}
-                        <td>^{toHtml      $ ev_description event}
+                        <td>#{               toSqlString  $  ev_startDate   event}
+                        <td>#{fromMaybe "" $ toSqlString <$> ev_endDate     event}
+                        <td>#{                               ev_title       event}
+                        <td>#{fromMaybe "" $                 ev_location    event}
+                        <td>#{fromMaybe "" $                 ev_description event}
                         <td>
                             <a href=@{EventR $ eventId event}>
                                 <button>Edit
@@ -450,18 +461,23 @@ getMemberCalendarR year month = if month < 1 || month > 12
                   Right events -> as events
         url = map (pathCompFromString . show) [year, month]
         getEventList :: Node -> RepositoryContext [Event]
-        getEventList node = getChildNodes node >>= return . (map fromNode)
-        eventId event = pack $ intercalate "/" [show year, show month, toSqlString $ ev_startDate event]
+        getEventList node = getChildNodesRecursively node >>= filterM (return . (== 4) . length . node_path) >>= return . (map fromNode)
+        eventId event = pack $ intercalate "/" [show year, show month, toSqlString $ ev_startDate event, unpack $ ev_title event]
             where (year, month, _) = toGregorian' $ ev_startDate event
 
 eventForm :: Maybe Event -> Html -> MForm Handler (FormResult Event, Widget)
 eventForm mevent = renderDivs $ makeEvent
-    <$> areq textField "Startdatum"   ((pack . toSqlString . ev_startDate)  <$> mevent)
-    <*> areq textField "Enddatum"     ((pack . toSqlString . ev_endDate)    <$> mevent)
-    <*> areq textField "Beschreibung" (                      ev_description <$> mevent)
-  where makeEvent start end desc = Event (fromMaybe startOfTime $ fromSqlString $ unpack start)
-                                         (fromMaybe startOfTime $ fromSqlString $ unpack end)
-                                         desc
+    <$> areq textField "Titel"        (                                                   fmap ev_title       mevent)
+    <*> areq textField "Startdatum"   (fmap pack $ fmap toSqlString $                     fmap ev_startDate   mevent)
+    <*> aopt textField "Enddatum"     ((fmap $ fmap pack) $ (fmap $ fmap toSqlString) $   fmap ev_endDate     mevent)
+    <*> aopt textField "Beschreibung" (                                                   fmap ev_description mevent)
+    <*> aopt textField "Ort"          (                                                   fmap ev_location    mevent)
+  where makeEvent :: Text -> Text -> Maybe Text -> Maybe Text -> Maybe Text -> Event
+        makeEvent title start end desc loc = Event title
+                                                   (fromMaybe startOfTime $ fromSqlString $ unpack start)
+                                                   (fromMaybe Nothing     $ fromSqlString <$> unpack <$> end)
+                                                   desc
+                                                   loc
 
 getEventR :: Text -> Handler Html
 getEventR name = do app               <- getYesod
@@ -481,6 +497,7 @@ postEventR name = do
     ((result, widget), enctype) <- runFormPost $ eventForm Nothing
     case result of FormSuccess event -> do app               <- getYesod
                                            let strName       =  unpack name
+                                           -- this should actually be removeItem (old path) >> writeItem (new path)
                                            result <- liftIO $ writeItem (calendarRepo app) strName event
                                            case result of
                                                Left e -> return $ trace (show e) ()

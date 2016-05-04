@@ -11,5 +11,6 @@ data Privilege = Create
 
 data Section = Members
              | MemberList
+             | MemberCalendar
 
 data Permission = On Privilege Section

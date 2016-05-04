@@ -20,6 +20,6 @@ main = do sem            <- newMVar True
             CBGWebSite staticSettings sem manager
                 (Repository "content")
                 (Repository "data/members")
-                (Repository "members/calendar")
+                (Repository "data/calendar")
                 (pack clientId)
                 (pack clientSecret)
