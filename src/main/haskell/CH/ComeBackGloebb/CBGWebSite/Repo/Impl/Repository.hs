@@ -13,6 +13,7 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     , getChildNodeNames
     , getChildNode
     , getChildNodes
+    , getChildNodesRecursively
     , Property (..)
     , getProperty
     , Value (..)
@@ -196,6 +197,13 @@ getChildNode node name = do let path      = node_path node
 --exported
 getChildNodes :: Node -> RepositoryContext [Node]
 getChildNodes node = getChildNodeNames node >>= mapM (getChildNode node)
+
+--exported
+getChildNodesRecursively :: Node -> RepositoryContext [Node]
+getChildNodesRecursively node = do
+  nodes <- getChildNodes node
+  nodes' <- mapM getChildNodesRecursively nodes
+  return $ nodes ++ concat nodes'
 
 --exported
 getProperty :: Node -> String -> Maybe Property
