@@ -68,9 +68,16 @@ instance Yesod CBGWebSite where
     isAuthorized RootR                 False = return Authorized
     isAuthorized FavR                  False = return Authorized
     isAuthorized (AuthR _)             _     = return Authorized
-    isAuthorized (MemberCalendarR _ _) False = return $ Unauthorized ""
     isAuthorized (EventR _)            _     = return $ Unauthorized ""
 
+    -- the members area
+    isAuthorized MembersR              False = do
+      authUser <- maybeAuthId
+      case authUser of
+        Just userName | userName `has` Read  `On` Members -> return Authorized
+        _                                                 -> return $ Unauthorized ""
+
+    -- the member list
     isAuthorized MemberListR           False = do
       authUser <- maybeAuthId
       case authUser of
@@ -85,14 +92,19 @@ instance Yesod CBGWebSite where
 
     isAuthorized (MemberR _)           w     = isAuthorized MemberListR w
 
-    isAuthorized MembersR              False = do
+    -- the event calendar
+    isAuthorized (MemberCalendarR _ _) False = isAuthorized MembersR False
+
+    isAuthorized (MemberCalendarR _ _) True  = do
       authUser <- maybeAuthId
       case authUser of
-        Just userName | userName `has` Read  `On` Members -> return Authorized
-        _                                                 -> return $ Unauthorized ""
+        Just userName | userName `has` Write `On` MemberCalendar -> return Authorized
+        _                                                        -> return $ Unauthorized ""
 
     isAuthorized (ContentR _)          False = return Authorized
-    isAuthorized (EditContentR _)      _     = return Authorized
+
+    isAuthorized (EditContentR _)      w     = isAuthorized MemberListR w
+
     isAuthorized _                     _     = return $ Unauthorized ""
 
 instance RenderMessage CBGWebSite FormMessage where
