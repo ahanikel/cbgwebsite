@@ -14,6 +14,7 @@ Executable CBGWebSite
   Main-Is: CH/ComeBackGloebb/CBGWebSite/Web/Main/Main.hs
   Default-Language: Haskell2010
   Build-Depends: base
+               , bytestring
                , directory
                , text
                , yesod

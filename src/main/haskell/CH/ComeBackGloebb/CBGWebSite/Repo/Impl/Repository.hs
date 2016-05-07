@@ -16,6 +16,7 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     , getChildNodesRecursively
     , Property (..)
     , getProperty
+    , writeBlobProperty
     , Value (..)
     , URL
     , urlFromString
@@ -39,6 +40,7 @@ import System.IO.Error (userError)
 import Data.List (intercalate, isSuffixOf)
 import System.Process (rawSystem)
 import System.Exit (ExitCode (..))
+import qualified Data.ByteString.Lazy as BL
 
 -- exported
 data Repository = Repository { root :: FilePath
@@ -133,12 +135,21 @@ writeProperties props path = mapM_ writeProperty props
                                   writeFile filePath value
 
 -- exported
+writeBlobProperty :: Node -> String -> BL.ByteString -> RepositoryContext ()
+writeBlobProperty node name bytes = do
+  let path = node_path node
+      path' = urlToFilePath path
+      repo  = node_repo node
+      fileName = name ++ ".blob"
+      filePath = root repo </> path' </> fileName
+  check $ BL.writeFile filePath bytes
+
+-- exported
 getNode :: Repository -> URL -> RepositoryContext Node
 getNode repo url = do let name       = case url of [] -> "/"
                                                    _  -> last url
                           filePath   = root repo </> urlToFilePath url
                       props <- check (readProperties filePath)
-                      check $ putStrLn $ show props
                       return $ Node name url props repo
 
 --exported
