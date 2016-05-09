@@ -71,7 +71,7 @@ mkYesod "CBGWebSite" [parseRoutes|
 |]
 
 instance Yesod CBGWebSite where
-    defaultLayout                            = cbgLayout
+    defaultLayout                            = cbgLayout []
     approot                                  = ApprootStatic "http://localhost:8080"
     -- isAuthorized route isWriteRequest? = ...
     isAuthorized RootR                 False = return Authorized
@@ -141,23 +141,14 @@ instance YesodAuth CBGWebSite where
 
 --instance YesodJQuery CBGWebSite
 
-emptyWidget :: a -> Widget
-emptyWidget _ = [whamlet||]
-
-cbgLayout :: Widget -> Handler Html
-cbgLayout widget = do pageContent  <- widgetToPageContent widget
-                      maybeAuthId  <- maybeAuthId
-                      req          <- getRequest
-                      let path     =  map unpack $ pathInfo $ reqWaiRequest req
-                      let repoPath =  case path of
-                                          ("content" : rest)          -> rest
-                                          ("edit" : "content" : rest) -> rest
-                                          _                           -> path
-                      app          <- getYesod
-                      eitherNode   <- liftIO $ runEitherT (getNode (contentRepo app) repoPath)
-                      navi         <- widgetToPageContent $ either emptyWidget navigationWidget eitherNode
-                      trail        <- widgetToPageContent $ either emptyWidget auditTrail eitherNode
-                      withUrlRenderer $(hamletFile "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/Impl/layout.hamlet")
+cbgLayout :: [Text] -> Widget -> Handler Html
+cbgLayout path widget = do pageContent  <- widgetToPageContent widget
+                           maybeAuthId  <- maybeAuthId
+                           req          <- getRequest
+                           --let path     =  pathInfo $ reqWaiRequest req
+                           navi         <- widgetToPageContent $ navigationWidget path
+                           trail        <- widgetToPageContent $ auditTrail       path
+                           withUrlRenderer $(hamletFile "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/Impl/layout.hamlet")
 
 withJQuery :: Widget -> Widget
 withJQuery widget = do
@@ -264,8 +255,8 @@ editPage contentBody = [whamlet|
             <div role=tabpanel .tab-pane .active id=permissions>...
     |]
 
-editLayout :: Widget -> Handler Html
-editLayout = defaultLayout . withBootstrap . editPage
+editLayout :: [Text] -> Widget -> Handler Html
+editLayout path = cbgLayout ("edit" : path) . withBootstrap . editPage
 
 getRootR :: Handler ()
 getRootR = redirect ("/content/welcome" :: String)
@@ -304,7 +295,7 @@ getEditContentR (ContentPath pieces) = do
     let contentBody = toWidget $ toHtml prop
     -- let propertiesWidget = 
     -- let permissionsWidget = 
-    editLayout contentBody
+    editLayout ("content" : pieces) contentBody
     
 postEditContentR :: ContentPath -> Handler Html
 postEditContentR (ContentPath pieces) = do
@@ -328,7 +319,7 @@ postEditContentR (ContentPath pieces) = do
             Right _ -> withUrlRenderer [hamlet||]
  
 getContentR :: ContentPath -> Handler Html
-getContentR (ContentPath pieces) = defaultLayout $ do
+getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
@@ -343,70 +334,96 @@ getContentR (ContentPath pieces) = defaultLayout $ do
                            Nothing -> ""
             toWidget $ preEscapedToMarkup prop
 
-navigationWidget :: Node -> Widget
-navigationWidget node = do eitherNodes <- liftIO $ runEitherT $ do
-                               parent       <- getParentNode node
-                               siblingNames <- getChildNodeNames parent
-                               siblings     <- mapM (getChildNode parent) siblingNames
-                               childNames   <- getChildNodeNames node
-                               children     <- mapM (getChildNode node) childNames
-                               welcome      <- getNode (node_repo node) ["welcome"]
-                               return (parent, siblings, children, welcome)
-                           case eitherNodes of
-                               Left ioe                                    -> trace (show node ++ "/navigationWidget: " ++ show (ioe :: IOException)) (return ())
-                               Right (parent, siblings, children, welcome) -> [whamlet|
-                                   <li .menu-123 .expanded>
-                                       $if node_path parent == []
-                                           <a href=#{url welcome} title=#{title welcome}>#{title welcome}
-                                       $else
-                                           <a href=#{url parent} title=#{title parent}>#{title parent}
-                                       <ul .menu>
-                                           $forall entry <- siblings
-                                               $if entry == welcome
-                                               $elseif entry == node
-                                                   <li .menu-123 .expanded>
-                                                       <a href=#{url entry} title=#{title entry}>#{title entry}
-                                                       <ul .menu>
-                                                           $forall child <- children
-                                                               <li .menu-123>
-                                                                   <a href=#{url child} title=#{title child}>#{title child}
-                                               $else
-                                                   <li .menu-123 .collapsed>
-                                                       <a href=#{url entry} title=#{title entry}>#{title entry}
-                               |]
-    where url           = ("/content/" ++) . urlToString . node_path
-          maybeTitleVal = fmap prop_value . flip getProperty ("title" :: String)
-          title n       = case maybeTitleVal n of
-                              Just v  -> show v
-                              Nothing -> ""
+navigationWidget :: [Text] -> Widget
+navigationWidget path = do
+    contentNavigation path
 
-auditTrail :: Node -> Widget
-auditTrail node = do eitherNodes <- liftIO $ runEitherT getTrail
+contentNavigation :: [Text] -> Widget
+contentNavigation path = do app         <- getYesod
+                            eitherNodes <- liftIO $ runEitherT $ do
+                                let path'    =  map unpack path
+                                let repoPath =  case path' of
+                                                    ("content" : rest)          -> rest
+                                                    ("edit" : "content" : rest) -> rest
+                                                    _                           -> []
+                                node         <- getNode (contentRepo app) repoPath
+                                parent       <- getParentNode node
+                                siblingNames <- getChildNodeNames parent
+                                siblings     <- mapM (getChildNode parent) siblingNames
+                                childNames   <- getChildNodeNames node
+                                children     <- mapM (getChildNode node) childNames
+                                welcome      <- getNode (node_repo node) ["welcome"]
+                                return (node, parent, siblings, children, welcome)
+                            case eitherNodes of
+                                Left ioe -> do
+                                    $logError $ pack (show (map unpack path) ++ "/navigationWidget: " ++ show (ioe :: IOException))
+                                    return ()
+                                Right (node, parent, siblings, children, welcome) -> [whamlet|
+                                    <li .menu-123 .expanded>
+                                        $if node_path parent == []
+                                            <a href=#{url welcome} title=#{title welcome}>#{title welcome}
+                                        $else
+                                            <a href=#{url parent} title=#{title parent}>#{title parent}
+                                        <ul .menu>
+                                            $forall entry <- siblings
+                                                $if entry == welcome
+                                                $elseif entry == node
+                                                    <li .menu-123 .expanded>
+                                                        <a href=#{url entry} title=#{title entry}>#{title entry}
+                                                        <ul .menu>
+                                                            $forall child <- children
+                                                                <li .menu-123>
+                                                                    <a href=#{url child} title=#{title child}>#{title child}
+                                                $else
+                                                    <li .menu-123 .collapsed>
+                                                        <a href=#{url entry} title=#{title entry}>#{title entry}
+                                |]
+    where url   = getContentUrlFromNode
+          title = getTitlePropertyOrEmpty
+
+auditTrail :: [Text] -> Widget
+auditTrail path = do app         <- getYesod
+                     eitherNodes <- liftIO $ runEitherT $ do
+                         let path'    = map unpack path
+                         let repoPath = case path' of
+                                            ("content" : rest)          -> rest
+                                            ("edit" : "content" : rest) -> rest
+                                            _                           -> []
+                         node        <- getNode (contentRepo app) repoPath
+                         getTrail node
                      case eitherNodes of
-                         Left ioe    -> trace (show node ++ "/auditTrail: " ++ show (ioe :: IOException)) (return ())
+                         Left ioe    -> do
+                             $logError $ pack (show (map unpack path) ++ "/auditTrail: " ++ show (ioe :: IOException))
+                             return ()
                          Right nodes -> mapM_ encodeTrail nodes
     where encodeTrail n = [whamlet|<li .menu-123 .collapsed>
                                        <a href=#{url n} title=#{title n}>#{title n}
                           |]
-          url           = ("/content/" ++) . urlToString . node_path
-          maybeTitleVal = fmap prop_value . flip getProperty ("title" :: String)
-          title n       = case maybeTitleVal n of
-                              Just v  -> show v
-                              Nothing -> ""
-          getTrail :: RepositoryContext [Node]
-          getTrail      = do nodes <- foldrM appendToNodes [node] $ node_path node
-                             let nodes' = tail nodes -- omit root node
-                             if nodes' == []
-                             then left $ userError "no root"
-                             else do
-                                welcome <- getNode (node_repo node) (urlFromString "/welcome")
-                                let first = node_path $ head nodes'
-                                case first of ["welcome"] -> return nodes'
-                                              _           -> return (welcome : nodes')
+          url   = getContentUrlFromNode
+          title = getTitlePropertyOrEmpty
+
+getContentUrlFromNode :: Node -> String
+getContentUrlFromNode = ("/content/" ++) . urlToString . node_path
+
+getTitlePropertyOrEmpty :: Node -> String
+getTitlePropertyOrEmpty = fromMaybe "" . fmap show . fmap prop_value . flip getProperty ("title" :: String)
+
+getTrail :: Node -> RepositoryContext [Node]
+getTrail node = do nodes       <- fmap tail $ getParentNodes node -- tail: omit root node
+                   if nodes == []
+                   then left $ userError "no root"
+                   else do
+                      welcome  <- getNode (node_repo node) (urlFromString "/welcome")
+                      let first = node_path $ head nodes
+                      case first of ["welcome"] -> return nodes
+                                    _           -> return (welcome : nodes)
+
+getParentNodes :: Node -> RepositoryContext [Node]
+getParentNodes node = foldrM appendToNodes [node] $ node_path node
+    where
           appendToNodes :: PathComponent -> [Node] -> RepositoryContext [Node]
           appendToNodes _ (n : ns) = do p <- getParentNode n
                                         return (p : n : ns)
-
 
 ------------------------------------------------------------------------------------------
 --- Member Calendar
