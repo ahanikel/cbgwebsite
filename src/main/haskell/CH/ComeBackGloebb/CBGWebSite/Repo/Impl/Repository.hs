@@ -16,6 +16,7 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     , getChildNodesRecursively
     , Property (..)
     , getProperty
+    , readBlobProperty
     , writeBlobProperty
     , Value (..)
     , URL
@@ -145,6 +146,16 @@ writeBlobProperty node name bytes = do
   check $ BL.writeFile filePath bytes
 
 -- exported
+readBlobProperty :: Node -> String -> RepositoryContext BL.ByteString
+readBlobProperty node name = do
+  let path = node_path node
+      path' = urlToFilePath path
+      repo = node_repo node
+      fileName = name ++ ".blob"
+      filePath = root repo </> path' </> fileName
+  check $ BL.readFile filePath
+
+-- exported
 getNode :: Repository -> URL -> RepositoryContext Node
 getNode repo url = do let name       = case url of [] -> "/"
                                                    _  -> last url
@@ -226,6 +237,7 @@ isRootNode :: Node -> Bool
 isRootNode n = node_path n == []
 
 --exported
+--deprecated: this abstraction is flawed
 class Persistent a where
     toNode       :: Repository -> String -> a -> Node
     fromNode     :: Node -> a

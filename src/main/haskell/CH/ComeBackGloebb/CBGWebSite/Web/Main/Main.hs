@@ -21,5 +21,6 @@ main = do sem            <- newMVar True
                 (Repository "content")
                 (Repository "data/members")
                 (Repository "data/calendar")
+                (Repository "data/galleries")
                 (pack clientId)
                 (pack clientSecret)

@@ -1,10 +1,13 @@
 module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery ( Gallery(gallery_name, gallery_images)
                                                        , Image(image_name, image_type, image_uploadedBy, image_uploadedDate)
+                                                       , list_galleries
                                                        , gallery_create
                                                        , gallery_read
                                                        , gallery_delete
                                                        , gallery_set_image
                                                        , gallery_remove_image
+                                                       , image_read
+                                                       , image_blob
                                                        ) where
 
 -- CBG
@@ -17,12 +20,11 @@ import Data.DateTime        (DateTime, startOfTime, fromSqlString, toSqlString)
 import Data.Maybe           (fromMaybe)
 import System.FilePath      ((</>))
 
-
 data Gallery = Gallery { gallery_repo       :: Repository
                        , gallery_name       :: String
-                       , gallery_images     :: [Image]
+                       , gallery_images     :: [String]
                        }
-               deriving (Show)
+               deriving (Show, Eq)
 
 data Image   = Image   { image_repo         :: Repository
                        , image_name         :: String
@@ -31,12 +33,11 @@ data Image   = Image   { image_repo         :: Repository
                        , image_uploadedBy   :: String
                        , image_uploadedDate :: DateTime
                        }
-               deriving (Show)
+               deriving (Show, Eq)
 
 instance Persistent Gallery where
 
-  fromNode node  = Gallery (node_repo node) name []
-    where name = node_name node
+  fromNode node  = Gallery (node_repo node) (node_name node) []
 
   toNode _ _ gallery = Node name (urlFromString name) [] (gallery_repo gallery)
     where name = gallery_name gallery
@@ -63,6 +64,13 @@ instance Persistent Image where
       repo         = image_repo    image
 
 --exported
+list_galleries :: Repository -> RepositoryContext [Gallery]
+list_galleries repo = do
+  root      <- getNode repo $ urlFromString "/"
+  gnames    <- getChildNodeNames root
+  mapM (gallery_read repo) gnames
+
+--exported
 gallery_create :: Repository -> String -> RepositoryContext Gallery
 gallery_create repo name = do
   let gallery = Gallery repo name []
@@ -71,14 +79,10 @@ gallery_create repo name = do
 
 --exported
 gallery_read   :: Repository -> String -> RepositoryContext Gallery
-gallery_read repo name = do
-  node           <- getNode repo $ urlFromString name
-  childnodes     <- getChildNodeNames node
-  let gallery     = fromNode node
-  let image_url   = urlFromString . (gallery_name gallery </>)
-  image_nodes    <- mapM (getNode repo . image_url) childnodes
-  let images      = map fromNode image_nodes
-  return gallery { gallery_images = images }
+gallery_read repo gname = do
+  gnode                <- getNode repo $ urlFromString gname
+  inames               <- getChildNodeNames gnode
+  return $ Gallery repo gname inames
 
 --exported
 gallery_delete :: Repository -> String -> RepositoryContext ()
@@ -105,3 +109,16 @@ gallery_remove_image gallery name = do
   inode    <- getChildNode gnode name
   deleteNode inode
   gallery_read (gallery_repo gallery) (gallery_name gallery)
+
+--exported
+image_read :: Repository -> String -> String -> RepositoryContext Image
+image_read repo gname iname = do
+    inode    <- getNode repo (urlFromString $ gname </> iname)
+    return $ fromNode inode
+
+--exported
+image_blob :: Image -> RepositoryContext ByteString
+image_blob image = do
+    let inode = toNode undefined undefined image
+    readBlobProperty inode "image"
+

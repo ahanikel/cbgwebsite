@@ -6,6 +6,7 @@ module CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite where
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
 import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
+import CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery
 
 -- Yesod
 import Yesod hiding (deleteBy, joinPath)
@@ -34,6 +35,8 @@ import Data.DateTime
 import Control.Exception.Base (throwIO)
 import Data.List (deleteBy)
 import System.FilePath (joinPath)
+import qualified Data.ByteString.UTF8 as U8
+import Data.List (elemIndex)
 
 staticFiles "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static"
 
@@ -43,6 +46,7 @@ data CBGWebSite = CBGWebSite { getStatic    :: Static
                              , contentRepo  :: Repository
                              , memberRepo   :: Repository
                              , calendarRepo :: Repository
+                             , galleryRepo  :: Repository
                              , clientId     :: Text
                              , clientSecret :: Text
                              }
@@ -59,6 +63,11 @@ mkYesod "CBGWebSite" [parseRoutes|
     /members/event/edit/#Text        EventR                GET POST
     /members/list                    MemberListR           GET
     /members/list/edit/#Text         MemberR               GET POST
+    /galleries                       GalleriesR            GET
+    /gallery/#Text                   GalleryR              GET POST DELETE
+    /gallery/#Text/images            GalleryImagesR        GET
+    /gallery/#Text/image/#Text       GalleryImageR         GET POST DELETE
+    /image/#Text/#Text               ImageR                GET
 |]
 
 instance Yesod CBGWebSite where
@@ -104,6 +113,17 @@ instance Yesod CBGWebSite where
     isAuthorized (ContentR _)          False = return Authorized
 
     isAuthorized (EditContentR _)      w     = isAuthorized MemberListR w
+
+    -- the galleries
+    isAuthorized GalleriesR            False = isAuthorized MembersR False
+
+    isAuthorized (GalleryR _)          False = isAuthorized MembersR False
+
+    isAuthorized (GalleryImagesR _)    False = isAuthorized MembersR False
+
+    isAuthorized (GalleryImageR _ _)   False = isAuthorized MembersR False
+
+    isAuthorized (ImageR _ _)          False = isAuthorized MembersR False
 
     isAuthorized _                     _     = return $ Unauthorized ""
 
@@ -643,3 +663,138 @@ getMemberListR = selectRep $ do
         memberId member = T.concat [name member, (pack " "), firstname member]
         getMemberList :: Node -> RepositoryContext [Member]
         getMemberList node = getChildNodes node >>= return . (map fromNode)
+
+
+------------------------------------------------------------------------------------------
+--- Galleries
+------------------------------------------------------------------------------------------
+
+getGalleriesR :: Handler TypedContent
+getGalleriesR = selectRep $ do
+    provideRep $ do
+        app             <- getYesod
+        eitherGalleries <- liftIO $ runEitherT $ list_galleries $ galleryRepo app
+        case eitherGalleries of
+            Left  e         -> do $logError $ pack $ show e
+                                  fail "Internal error while trying to list galleries."
+            Right galleries ->
+                defaultLayout [whamlet|
+                    <table>
+                        <tr>
+                            <th>Gallery Name
+                        $forall gallery <- galleries
+                            <tr>
+                                <td>
+                                    <a href=@{GalleryR (pack $ gallery_name gallery)}>#{gallery_name gallery}
+                |]
+
+getGalleryR :: Text -> Handler TypedContent
+getGalleryR gname = selectRep $ do
+    provideRep $ do
+        app           <- getYesod
+        eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (unpack gname)
+        case eitherGallery of
+            Left  e         -> do $logError $ pack $ show e
+                                  fail "Internal error while trying to list galleries."
+            Right gallery ->
+                defaultLayout [whamlet|
+                    <h1>#{gname}
+                    <h2>Properties
+                    <table>
+                        <tr>
+                            <th>Gallery name
+                        <tr>
+                            <td>#{gname}
+                    <h2>Images
+                    <table>
+                        <tr>
+                            <th>image
+                        $forall iname <- map pack $ gallery_images gallery
+                            <tr>
+                                <td>
+                                    <a href=@{GalleryImageR gname iname}>#{iname}
+                 |]
+ 
+postGalleryR :: Text -> Handler Html
+postGalleryR name = undefined
+
+deleteGalleryR :: Text -> Handler Html
+deleteGalleryR name = undefined
+
+getGalleryImagesR :: Text -> Handler TypedContent
+getGalleryImagesR gname = selectRep $ do
+    provideRep $ do
+        app           <- getYesod
+        eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (unpack gname)
+        case eitherGallery of
+            Left  e         -> do $logError $ pack $ show e
+                                  fail "Internal error while trying to list galleries."
+            Right gallery ->
+                defaultLayout [whamlet|
+                    <h1>#{gname}
+                    <table>
+                        <tr>
+                            <th>image
+                        $forall iname <- map pack $ gallery_images gallery
+                            <tr>
+                                <td>
+                                    <a href=@{GalleryImageR gname iname}>#{iname}
+                |]
+
+
+getGalleryImageR :: Text -> Text -> Handler TypedContent
+getGalleryImageR gname iname = selectRep $ do
+    provideRep $ do
+        app           <- getYesod
+        eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (unpack gname)
+        case eitherGallery of
+            Left  e       -> do
+                $logError $ pack $ show e
+                fail "Internal error while trying to list galleries."
+            Right gallery -> do
+                let images     = gallery_images gallery
+                    Just imgno = elemIndex (unpack iname) images
+                    imgprev    = if imgno < 1
+                                 then []
+                                 else take 1 $ drop (imgno - 1) images
+                    imgnext    = take 1 $ drop (imgno + 1) images
+                defaultLayout [whamlet|
+                    <h1>#{gname} - #{iname}
+                    <table>
+                        <tr>
+                            <th>
+                                $case imgprev
+                                    $of [prev]
+                                        <a href=@{GalleryImageR gname (pack prev)}>&lt;- Vorheriges
+                                    $of _
+                                |
+                                $case imgnext
+                                    $of [next]
+                                        <a href=@{GalleryImageR gname (pack next)}>Nächstes -&gt;
+                                    $of _
+                        <tr>
+                            <td>
+                                <a href=@{ImageR gname iname}>
+                                    <img src=@{ImageR gname iname}>
+                |]
+
+
+postGalleryImageR :: Text -> Text -> Handler Html
+postGalleryImageR gname name = undefined
+
+deleteGalleryImageR :: Text -> Text -> Handler Html
+deleteGalleryImageR gname name = undefined
+
+getImageR :: Text -> Text -> Handler ()
+getImageR gname iname = do
+    app         <- getYesod
+    eitherImage <- liftIO $ runEitherT $ do
+        image <- image_read (galleryRepo app) (unpack gname) (unpack iname)
+        blob  <- image_blob image
+        return (image, blob)
+    case eitherImage of
+        Left e -> do
+            $logError $ pack $ show e
+            fail "Internal error while trying to load image."
+        Right (image, blob) ->
+            sendWaiResponse $ responseLBS status200 [("Content-Type",  U8.fromString $ image_type image)] blob
