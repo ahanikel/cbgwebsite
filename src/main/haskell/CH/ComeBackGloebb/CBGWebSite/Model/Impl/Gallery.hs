@@ -19,10 +19,13 @@ import Data.ByteString.Lazy (ByteString)
 import Data.DateTime        (DateTime, startOfTime, fromSqlString, toSqlString)
 import Data.Maybe           (fromMaybe)
 import System.FilePath      ((</>))
+import Data.Ord             (Ord, compare)
+import Data.List            (sort)
 
 data Gallery = Gallery { gallery_repo       :: Repository
                        , gallery_name       :: String
                        , gallery_images     :: [String]
+                       , gallery_sort_key   :: String
                        }
                deriving (Show, Eq)
 
@@ -37,7 +40,7 @@ data Image   = Image   { image_repo         :: Repository
 
 instance Persistent Gallery where
 
-  fromNode node  = Gallery (node_repo node) (node_name node) []
+  fromNode node  = Gallery (node_repo node) (node_name node) [] ""
 
   toNode _ _ gallery = Node name (urlFromString name) [] (gallery_repo gallery)
     where name = gallery_name gallery
@@ -63,17 +66,23 @@ instance Persistent Image where
       uploadedDate = Property "uploadedDate" $ StringValue $ toSqlString $ image_uploadedDate image
       repo         = image_repo    image
 
+instance Ord Gallery where
+
+  compare a b = compare (key a) (key b)
+    where
+      key g = gallery_sort_key g ++ gallery_name g
+
 --exported
 list_galleries :: Repository -> RepositoryContext [Gallery]
 list_galleries repo = do
   root      <- getNode repo $ urlFromString "/"
   gnames    <- getChildNodeNames root
-  mapM (gallery_read repo) gnames
+  mapM (gallery_read repo) gnames >>= return . sort
 
 --exported
 gallery_create :: Repository -> String -> RepositoryContext Gallery
 gallery_create repo name = do
-  let gallery = Gallery repo name []
+  let gallery = Gallery repo name [] ""
   writeNode $ toNode undefined undefined gallery
   return gallery
 
@@ -82,7 +91,8 @@ gallery_read   :: Repository -> String -> RepositoryContext Gallery
 gallery_read repo gname = do
   gnode                <- getNode repo $ urlFromString gname
   inames               <- getChildNodeNames gnode
-  return $ Gallery repo gname inames
+  let sortKey           = fromMaybe "" $ fmap show $ fmap prop_value $ getProperty gnode "sortKey"
+  return $ Gallery repo gname (sort inames) sortKey
 
 --exported
 gallery_delete :: Repository -> String -> RepositoryContext ()

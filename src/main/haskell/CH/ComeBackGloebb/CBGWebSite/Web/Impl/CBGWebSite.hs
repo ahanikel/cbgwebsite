@@ -125,6 +125,7 @@ instance Yesod CBGWebSite where
 
     isAuthorized (ImageR _ _)          False = isAuthorized MembersR False
 
+    -- everything else
     isAuthorized _                     _     = return $ Unauthorized ""
 
 instance RenderMessage CBGWebSite FormMessage where
@@ -293,10 +294,10 @@ getEditContentR (ContentPath pieces) = do
                              Nothing -> ""
             return (prop, title)
     let contentBody = toWidget $ toHtml prop
-    -- let propertiesWidget = 
-    -- let permissionsWidget = 
+    -- let propertiesWidget =
+    -- let permissionsWidget =
     editLayout ("content" : pieces) contentBody
-    
+
 postEditContentR :: ContentPath -> Handler Html
 postEditContentR (ContentPath pieces) = do
     app <- getYesod
@@ -317,7 +318,7 @@ postEditContentR (ContentPath pieces) = do
             Left ioe -> liftIO $ throwIO ioe
             --Right _  -> redirect $ joinPath ("/content/" : (map unpack pieces))
             Right _ -> withUrlRenderer [hamlet||]
- 
+
 getContentR :: ContentPath -> Handler Html
 getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
     app <- getYesod
@@ -334,9 +335,14 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
                            Nothing -> ""
             toWidget $ preEscapedToMarkup prop
 
+------------------------------------------------------------------------------------------
+--- Navigation
+------------------------------------------------------------------------------------------
+
 navigationWidget :: [Text] -> Widget
 navigationWidget path = do
     contentNavigation path
+    galleryNavigation path
 
 contentNavigation :: [Text] -> Widget
 contentNavigation path = do app         <- getYesod
@@ -345,7 +351,7 @@ contentNavigation path = do app         <- getYesod
                                 let repoPath =  case path' of
                                                     ("content" : rest)          -> rest
                                                     ("edit" : "content" : rest) -> rest
-                                                    _                           -> []
+                                                    _                           -> fail "no content node"
                                 node         <- getNode (contentRepo app) repoPath
                                 parent       <- getParentNode node
                                 siblingNames <- getChildNodeNames parent
@@ -356,7 +362,6 @@ contentNavigation path = do app         <- getYesod
                                 return (node, parent, siblings, children, welcome)
                             case eitherNodes of
                                 Left ioe -> do
-                                    $logError $ pack (show (map unpack path) ++ "/navigationWidget: " ++ show (ioe :: IOException))
                                     return ()
                                 Right (node, parent, siblings, children, welcome) -> [whamlet|
                                     <li .menu-123 .expanded>
@@ -388,12 +393,11 @@ auditTrail path = do app         <- getYesod
                          let repoPath = case path' of
                                             ("content" : rest)          -> rest
                                             ("edit" : "content" : rest) -> rest
-                                            _                           -> []
+                                            _                           -> fail "not a content node"
                          node        <- getNode (contentRepo app) repoPath
                          getTrail node
                      case eitherNodes of
                          Left ioe    -> do
-                             $logError $ pack (show (map unpack path) ++ "/auditTrail: " ++ show (ioe :: IOException))
                              return ()
                          Right nodes -> mapM_ encodeTrail nodes
     where encodeTrail n = [whamlet|<li .menu-123 .collapsed>
@@ -401,6 +405,30 @@ auditTrail path = do app         <- getYesod
                           |]
           url   = getContentUrlFromNode
           title = getTitlePropertyOrEmpty
+
+galleryNavigation :: [Text] -> Widget
+galleryNavigation path = do
+  [whamlet|<li .menu-123 .expanded>
+               <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+  |]
+  app <- getYesod
+  eitherGalleries <- liftIO $ runEitherT $ list_galleries $ galleryRepo app
+  case eitherGalleries of
+    Left ioe -> do
+      $logError $ pack $ show (map unpack path) ++ "/galleryNavigation: " ++ show (ioe :: IOException)
+      return ()
+    Right galleries -> case path of
+      ("galleries" : _) -> mapM_ renderGallery galleries
+      ("gallery"   : _) -> mapM_ renderGallery galleries
+      _               -> $logError (pack $ "path is: " ++ show (map unpack path)) >> return ()
+
+  where
+    renderGallery g = do
+      let gname = pack $ gallery_name g
+      [whamlet|<li .menu-123 .collapsed>
+                   <a href=@{GalleryR gname} title=#{gname}>#{gname}
+      |]
+
 
 getContentUrlFromNode :: Node -> String
 getContentUrlFromNode = ("/content/" ++) . urlToString . node_path
@@ -625,7 +653,7 @@ getMemberR name = do app               <- getYesod
                      |]
 
 postMemberR :: Text -> Handler Html
-postMemberR name = do 
+postMemberR name = do
     ((result, widget), enctype) <- runFormPost $ memberForm Nothing
     case result of FormSuccess member -> do app               <- getYesod
                                             result <- liftIO $ writeItem (memberRepo app) (unpack name) member
@@ -695,7 +723,7 @@ getGalleriesR = selectRep $ do
             Left  e         -> do $logError $ pack $ show e
                                   fail "Internal error while trying to list galleries."
             Right galleries ->
-                defaultLayout [whamlet|
+                cbgLayout ["galleries"] [whamlet|
                     <table>
                         <tr>
                             <th>Gallery Name
@@ -714,7 +742,7 @@ getGalleryR gname = selectRep $ do
             Left  e         -> do $logError $ pack $ show e
                                   fail "Internal error while trying to list galleries."
             Right gallery ->
-                defaultLayout [whamlet|
+                cbgLayout ["gallery", gname] [whamlet|
                     <h1>#{gname}
                     <h2>Properties
                     <table>
@@ -731,7 +759,7 @@ getGalleryR gname = selectRep $ do
                                 <td>
                                     <a href=@{GalleryImageR gname iname}>#{iname}
                  |]
- 
+
 postGalleryR :: Text -> Handler Html
 postGalleryR name = undefined
 
@@ -747,7 +775,7 @@ getGalleryImagesR gname = selectRep $ do
             Left  e         -> do $logError $ pack $ show e
                                   fail "Internal error while trying to list galleries."
             Right gallery ->
-                defaultLayout [whamlet|
+                cbgLayout ["gallery", gname] [whamlet|
                     <h1>#{gname}
                     <table>
                         <tr>
@@ -775,7 +803,7 @@ getGalleryImageR gname iname = selectRep $ do
                                  then []
                                  else take 1 $ drop (imgno - 1) images
                     imgnext    = take 1 $ drop (imgno + 1) images
-                defaultLayout [whamlet|
+                cbgLayout ["gallery", gname, iname] [whamlet|
                     <h1>#{gname} - #{iname}
                     <table>
                         <tr>
