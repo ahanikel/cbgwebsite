@@ -21,19 +21,7 @@ $doctype 5
                             <li .menu-170 .last>
                                 <a href=@{AuthR LogoutR} title="Logout">Logout #{userid}
                 <div #sidebar-left .sidebar>
-                    <div #block-menu-primary-links .clear-block .block .block-menu>
-                        <h1>Come Back Glöbb
-                        <div .content>
-                            <ul .menu>
-                                ^{pageBody navi}
-                                $maybe userid <- maybeAuthId
-                                    <li .leaf>
-                                        <a href=/mitglieder title="Mitglieder">Mitglieder
-                                    <li .leaf .last>
-                                        <a href=@{AuthR LogoutR} title="Logout">Logout #{userid}
-                                $nothing
-                                    <li .leaf .last>
-                                        <a href=@{AuthR LoginR} title="Mitglieder">Mitglieder
+                    ^{pageBody navi}
                 <div #center>
                     <div #squeeze>
                         <div .right-corner>
