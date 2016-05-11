@@ -341,78 +341,77 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
 navigationWidget :: Maybe authId -> [Text] -> Widget
 navigationWidget maybeAuthId path = do
     let path' =  map unpack path
+    let casePart = case maybeAuthId of
+                       Just userid ->
+                           case path' of
+                               ("content" : _) ->
+                                   [whamlet|
+                                               <li .expanded>
+                                                   <a href=@{RootR} title=Willkommen>Willkommen
+                                                   ^{contentNavigation path}
+                                               <li .collapsed>
+                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
+                                               <li .collapsed>
+                                                   <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                   |]
+                               ("members" : _) ->
+                                   [whamlet|
+                                               <li .collapsed>
+                                                   <a href=@{RootR} title=Willkommen>Willkommen
+                                               <li .expanded>
+                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
+                                               <li .collapsed>
+                                                   <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                   |]
+                               ("galleries" : _) ->
+                                   [whamlet|
+                                               <li .collapsed>
+                                                   <a href=@{RootR} title=Willkommen>Willkommen
+                                               <li .collapsed>
+                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
+                                               <li .expanded>
+                                                   <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                                   <ul .menu>
+                                                       ^{galleryNavigation path}
+                                   |]
+                               ("gallery" : _) ->
+                                   [whamlet|
+                                               <li .collapsed>
+                                                   <a href=@{RootR} title=Willkommen>Willkommen
+                                               <li .collapsed>
+                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
+                                               <li .expanded>
+                                                   <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                                   <ul .menu>
+                                                       ^{galleryNavigation path}
+                                   |]
+                               _ ->
+                                   [whamlet|
+                                               <li .collapsed>
+                                                   <a href=@{RootR} title=Willkommen>Willkommen
+                                               <li .collapsed>
+                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
+                                               <li .collapsed>
+                                                   <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                   |]
+                       Nothing ->
+                               [whamlet|
+                                       <li .expanded>
+                                           <a href=@{RootR} title=Willkommen>Willkommen
+                                           <ul .menu>
+                                               ^{contentNavigation path}
+                                       <li .leaf .last>
+                                           <a href=@{AuthR LoginR} title="Mitglieder">Mitglieder
+                               |]
     [whamlet|
         <div #block-menu-primary-links .clear-block .block .block-menu>
             <h1>Come Back Glöbb
             <div .content>
                 <ul .menu>
+                    ^{casePart}
+                    <li .leaf .last>
+                        <a href=@{AuthR LogoutR} title="Logout">Logout
     |]
-    case maybeAuthId of
-        Just userid -> do
-            case path' of
-                ("content" : _) ->
-                    [whamlet|
-                                <li .expanded>
-                                    <a href=@{RootR} title=Willkommen>Willkommen
-                                ^{contentNavigation path}
-                                <li .collapsed>
-                                    <a href=@{MembersR} title="Mitglieder">Mitglieder
-                                <li .collapsed>
-                                    <a href=@{GalleriesR} title=Fotoalben>Fotoalben
-                    |]
-                ("members" : _) ->
-                    [whamlet|
-                                <li .collapsed>
-                                    <a href=@{RootR} title=Willkommen>Willkommen
-                                <li .expanded>
-                                    <a href=@{MembersR} title="Mitglieder">Mitglieder
-                                <li .collapsed>
-                                    <a href=@{GalleriesR} title=Fotoalben>Fotoalben
-                    |]
-                ("galleries" : _) ->
-                    [whamlet|
-                                <li .collapsed>
-                                    <a href=@{RootR} title=Willkommen>Willkommen
-                                <li .collapsed>
-                                    <a href=@{MembersR} title="Mitglieder">Mitglieder
-                                <li .expanded>
-                                    <a href=@{GalleriesR} title=Fotoalben>Fotoalben
-                                    <ul .menu>
-                                        ^{galleryNavigation path}
-                    |]
-                ("gallery" : _) ->
-                    [whamlet|
-                                <li .collapsed>
-                                    <a href=@{RootR} title=Willkommen>Willkommen
-                                <li .collapsed>
-                                    <a href=@{MembersR} title="Mitglieder">Mitglieder
-                                <li .expanded>
-                                    <a href=@{GalleriesR} title=Fotoalben>Fotoalben
-                                    <ul .menu>
-                                        ^{galleryNavigation path}
-                    |]
-                _ ->
-                    [whamlet|
-                                <li .collapsed>
-                                    <a href=@{RootR} title=Willkommen>Willkommen
-                                <li .collapsed>
-                                    <a href=@{MembersR} title="Mitglieder">Mitglieder
-                                <li .collapsed>
-                                    <a href=@{GalleriesR} title=Fotoalben>Fotoalben
-                    |]
-            [whamlet|
-                <li .leaf .last>
-                    <a href=@{AuthR LogoutR} title="Logout">Logout
-            |]
-        Nothing ->
-                [whamlet|
-                        <li .expanded>
-                            <a href=@{RootR} title=Willkommen>Willkommen
-                            <ul .menu>
-                                ^{contentNavigation path}
-                        <li .leaf .last>
-                            <a href=@{AuthR LoginR} title="Mitglieder">Mitglieder
-                |]
 
 contentNavigation :: [Text] -> Widget
 contentNavigation path = do app         <- getYesod
@@ -433,25 +432,31 @@ contentNavigation path = do app         <- getYesod
                             case eitherNodes of
                                 Left ioe -> do
                                     return ()
-                                Right (node, parent, siblings, children, welcome) -> [whamlet|
-                                    <li .expanded>
-                                        $if node_path parent == []
-                                        $else
-                                            <a href=#{url parent} title=#{title parent}>#{title parent}
+                                Right (node, parent, siblings, children, welcome) -> do
+                                    let subnavi = [whamlet|
+                                        $forall entry <- siblings
+                                            $if entry == welcome
+                                            $elseif entry == node
+                                                <li .expanded>
+                                                    <a href=#{url entry} title=#{title entry}>#{title entry}
+                                                    <ul .menu>
+                                                        $forall child <- children
+                                                            <li>
+                                                                <a href=#{url child} title=#{title child}>#{title child}
+                                            $else
+                                                <li .collapsed>
+                                                    <a href=#{url entry} title=#{title entry}>#{title entry}
+                                    |]
+                                    [whamlet|
                                         <ul .menu>
-                                            $forall entry <- siblings
-                                                $if entry == welcome
-                                                $elseif entry == node
-                                                    <li .expanded>
-                                                        <a href=#{url entry} title=#{title entry}>#{title entry}
-                                                        <ul .menu>
-                                                            $forall child <- children
-                                                                <li>
-                                                                    <a href=#{url child} title=#{title child}>#{title child}
-                                                $else
-                                                    <li .collapsed>
-                                                        <a href=#{url entry} title=#{title entry}>#{title entry}
-                                |]
+                                            $if node_path parent == []
+                                                ^{subnavi}
+                                            $else
+                                                <li .expanded>
+                                                    <a href=#{url parent} title=#{title parent}>#{title parent}
+                                                    <ul .menu>
+                                                        ^{subnavi}
+                                    |]
     where url   = getContentUrlFromNode
           title = getTitlePropertyOrEmpty
 
@@ -477,23 +482,31 @@ auditTrail path = do app         <- getYesod
 
 galleryNavigation :: [Text] -> Widget
 galleryNavigation path = do
-  app <- getYesod
+  app             <- getYesod
   eitherGalleries <- liftIO $ runEitherT $ list_galleries $ galleryRepo app
   case eitherGalleries of
     Left ioe -> do
       $logError $ pack $ show (map unpack path) ++ "/galleryNavigation: " ++ show (ioe :: IOException)
       return ()
     Right galleries -> case path of
-      ("galleries" : _) -> mapM_ renderGallery galleries
-      ("gallery"   : _) -> mapM_ renderGallery galleries
-      _               -> return ()
+      ("galleries" : _)        -> mapM_ (renderGallery   Nothing)   galleries
+      ("gallery"   : self : _) -> mapM_ (renderGallery $ Just self) galleries
+      _                        -> return ()
 
   where
-    renderGallery g = do
+    renderGallery maybeSelf g = do
       let gname = pack $ gallery_name g
-      [whamlet|<li .menu-123 .collapsed>
-                   <a href=@{GalleryR gname} title=#{gname}>#{gname}
-      |]
+      case maybeSelf of
+        Just self | self == gname ->
+          [whamlet|
+              <li .expanded>
+                  <a href=@{GalleryR gname} title=#{gname}>#{gname}
+          |]
+        _ ->
+          [whamlet|
+              <li .collapsed>
+                  <a href=@{GalleryR gname} title=#{gname}>#{gname}
+          |]
 
 
 getContentUrlFromNode :: Node -> String
@@ -810,21 +823,11 @@ getGalleryR gname = selectRep $ do
             Right gallery ->
                 cbgLayout ["gallery", gname] [whamlet|
                     <h1>#{gname}
-                    <h2>Properties
-                    <table>
-                        <tr>
-                            <th>Gallery name
-                        <tr>
-                            <td>#{gname}
-                    <h2>Images
-                    <table>
-                        <tr>
-                            <th>image
+                    <div .row>
                         $forall iname <- map pack $ gallery_images gallery
-                            <tr>
-                                <td>
-                                    <a href=@{GalleryImageR gname iname}>#{iname}
-                 |]
+                            <a href=@{GalleryImageR gname iname}>
+                                <img src=@{ImageR gname iname} alt=#{iname} width=171>
+                |]
 
 postGalleryR :: Text -> Handler Html
 postGalleryR name = undefined
