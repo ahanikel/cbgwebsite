@@ -1,4 +1,4 @@
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings, MultiParamTypeClasses, ViewPatterns, RecordWildCards #-}
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings, MultiParamTypeClasses, ViewPatterns, RecordWildCards, FlexibleContexts #-}
 
 module CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite where
 
@@ -23,7 +23,7 @@ import Control.Concurrent (MVar, newMVar)
 import Data.Text (Text, unpack, pack)
 import qualified Data.Text as T
 import Control.Monad (filterM, liftM)
-import Data.List (intercalate)
+import Data.List (intercalate, deleteBy, elemIndex, sort)
 import Control.Exception (IOException)
 import Data.Aeson (encode, object)
 import Control.Monad.Trans.Either (runEitherT, left)
@@ -59,7 +59,8 @@ mkYesod "CBGWebSite" [parseRoutes|
     /members                         MembersR              GET
     /content/+ContentPath            ContentR              GET
     /edit/content/+ContentPath       EditContentR          GET POST
-    /members/calendar/#Int/#Int      MemberCalendarR       GET
+    /members/calendar                MemberCalendarR       GET
+    /members/calendar/#Int/#Int      MemberCalendarMR      GET
     /members/event/edit/#Text        EventR                GET POST
     /members/list                    MemberListR           GET
     /members/list/edit/#Text         MemberR               GET POST
@@ -71,62 +72,64 @@ mkYesod "CBGWebSite" [parseRoutes|
 |]
 
 instance Yesod CBGWebSite where
-    defaultLayout                            = cbgLayout []
-    approot                                  = ApprootStatic "http://localhost:8080"
+    defaultLayout                             = cbgLayout []
+    approot                                   = ApprootStatic "http://localhost:8080"
     -- isAuthorized route isWriteRequest? = ...
-    isAuthorized RootR                 False = return Authorized
-    isAuthorized FavR                  False = return Authorized
-    isAuthorized (AuthR _)             _     = return Authorized
-    isAuthorized (EventR _)            _     = return $ Unauthorized ""
+    isAuthorized RootR                  False = return Authorized
+    isAuthorized FavR                   False = return Authorized
+    isAuthorized (AuthR _)              _     = return Authorized
+    isAuthorized (EventR _)             _     = return $ Unauthorized ""
 
     -- the members area
-    isAuthorized MembersR              False = do
+    isAuthorized MembersR               False = do
       authUser <- maybeAuthId
       case authUser of
         Just userName | userName `has` Read  `On` Members -> return Authorized
         _                                                 -> return $ Unauthorized ""
 
     -- the member list
-    isAuthorized MemberListR           False = do
+    isAuthorized MemberListR            False = do
       authUser <- maybeAuthId
       case authUser of
         Just userName | userName `has` Read  `On` MemberList -> return Authorized
         _                                                    -> return $ Unauthorized ""
 
-    isAuthorized MemberListR           True  = do
+    isAuthorized MemberListR            True  = do
       authUser <- maybeAuthId
       case authUser of
         Just userName | userName `has` Write `On` MemberList -> return Authorized
         _                                                    -> return $ Unauthorized ""
 
-    isAuthorized (MemberR _)           w     = isAuthorized MemberListR w
+    isAuthorized (MemberR _)            w     = isAuthorized MemberListR w
 
     -- the event calendar
-    isAuthorized (MemberCalendarR _ _) False = isAuthorized MembersR False
+    isAuthorized  MemberCalendarR       False = isAuthorized MembersR False
 
-    isAuthorized (MemberCalendarR _ _) True  = do
+    isAuthorized (MemberCalendarMR _ _) False = isAuthorized MembersR False
+
+    isAuthorized (MemberCalendarMR _ _) True  = do
       authUser <- maybeAuthId
       case authUser of
         Just userName | userName `has` Write `On` MemberCalendar -> return Authorized
         _                                                        -> return $ Unauthorized ""
 
-    isAuthorized (ContentR _)          False = return Authorized
+    isAuthorized (ContentR _)           False = return Authorized
 
-    isAuthorized (EditContentR _)      w     = isAuthorized MemberListR w
+    isAuthorized (EditContentR _)       w     = isAuthorized MemberListR w
 
     -- the galleries
-    isAuthorized GalleriesR            False = isAuthorized MembersR False
+    isAuthorized GalleriesR             False = isAuthorized MembersR False
 
-    isAuthorized (GalleryR _)          False = isAuthorized MembersR False
+    isAuthorized (GalleryR _)           False = isAuthorized MembersR False
 
-    isAuthorized (GalleryImagesR _)    False = isAuthorized MembersR False
+    isAuthorized (GalleryImagesR _)     False = isAuthorized MembersR False
 
-    isAuthorized (GalleryImageR _ _)   False = isAuthorized MembersR False
+    isAuthorized (GalleryImageR _ _)    False = isAuthorized MembersR False
 
-    isAuthorized (ImageR _ _)          False = isAuthorized MembersR False
+    isAuthorized (ImageR _ _)           False = isAuthorized MembersR False
 
     -- everything else
-    isAuthorized _                     _     = return $ Unauthorized ""
+    isAuthorized _                      _     = return $ Unauthorized ""
 
 instance RenderMessage CBGWebSite FormMessage where
     renderMessage _ _ = defaultFormMessage
@@ -265,7 +268,7 @@ getFavR :: Handler ()
 getFavR = sendFile "image/png" "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static/cbg-favicon.png"
 
 getMembersR :: Handler Html
-getMembersR = defaultLayout [whamlet|<h1>Welcome to the members area|]
+getMembersR = cbgLayout ["members"] [whamlet|<h1>Welcome to the members area|]
 
 data ContentPath = ContentPath [Text]
     deriving (Read, Show, Eq)
@@ -279,7 +282,7 @@ getEditContentR (ContentPath pieces) = do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
-        node <- getNode (contentRepo app) $ trace (show url) url
+        node <- getNode (contentRepo app) url
         return node
     (prop, title) <- case eitherNode of
         Left ioe -> notFound
@@ -302,7 +305,7 @@ postEditContentR (ContentPath pieces) = do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
-        node <- getNode (contentRepo app) $ trace (show url) url
+        node <- getNode (contentRepo app) url
         return node
     case eitherNode of
         Left ioe -> notFound
@@ -323,7 +326,7 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
-        node <- getNode (contentRepo app) $ trace (show url) url
+        node <- getNode (contentRepo app) url
         return node
     case eitherNode of
         Left ioe -> notFound
@@ -360,6 +363,11 @@ navigationWidget maybeAuthId path = do
                                                    <a href=@{RootR} title=Willkommen>Willkommen
                                                <li .expanded>
                                                    <a href=@{MembersR} title="Mitglieder">Mitglieder
+                                                   <ul .menu>
+                                                       <li .leaf>
+                                                           <a href=@{MemberCalendarR} title=Kalender>Kalender
+                                                       <li .leaf>
+                                                           <a href=@{MemberListR} title=Mitgliederliste>Mitgliederliste
                                                <li .collapsed>
                                                    <a href=@{GalleriesR} title=Fotoalben>Fotoalben
                                    |]
@@ -570,11 +578,16 @@ instance ToJSON Event where
                                , "location"    .= fromMaybe ""                  ev_location
                                ]
 
-getMemberCalendarR :: Int -> Int -> Handler TypedContent
-getMemberCalendarR year month = if month < 1 || month > 12
-                                then notFound
-                                else selectRep $ do
-    provideRep $ renderEvents $ \events -> defaultLayout
+getMemberCalendarR :: Handler ()
+getMemberCalendarR = do
+    (year, month, _) <- liftIO $ getCurrentTime >>= return . toGregorian'
+    redirect $ MemberCalendarMR (fromInteger year) month
+
+getMemberCalendarMR :: Int -> Int -> Handler TypedContent
+getMemberCalendarMR year month = if   month < 1 || month > 12
+                                 then notFound
+                                 else selectRep $ do
+    provideRep $ renderEvents $ \events -> cbgLayout ["members", "calendar"]
         [whamlet|
             <table>
                 <tr>
@@ -630,7 +643,7 @@ getEventR name = do app               <- getYesod
                                                 Just
                                                 eitherEvent
                     (widget, encType) <- generateFormPost $ eventForm mevent
-                    defaultLayout [whamlet|
+                    cbgLayout ["members", "event"] [whamlet|
                        <form method=post action=@{EventR name} enctype=#{encType}>
                            ^{widget}
                            <button>Submit
@@ -647,8 +660,8 @@ postEventR name = do
                                                Left e -> return $ trace (show e) ()
                                                _      -> return $ ()
                                            let (year, month, _) = toGregorian' $ ev_startDate event
-                                           redirect $ MemberCalendarR (fromInteger year) month
-                   _                 -> defaultLayout [whamlet|
+                                           redirect $ MemberCalendarMR (fromInteger year) month
+                   _                 -> cbgLayout ["members", "event"] [whamlet|
                                             <p>Da stimmt etwas nicht, versuch's nochmal
                                             <form method=post action=@{EventR name} enctype=#{enctype}>
                                                 ^{widget}
@@ -670,8 +683,13 @@ data Member = Member { firstname :: Text
                      , phone     :: Maybe Text
                      , mobile    :: Maybe Text
                      , email     :: Maybe Text
-                     } deriving (Show)
+                     } deriving (Show, Eq)
 
+instance Ord Member where
+  compare a b = compare (key a) (key b)
+    where
+      key m = (show $ name m) ++ (show $ firstname m)
+  
 instance ToJSON Member where
     toJSON Member {..} = object ["firstname"  .= firstname
                                 ,"name"       .= name
@@ -725,7 +743,7 @@ getMemberR name = do app               <- getYesod
                                                  Just
                                                  eitherMember
                      (widget, encType) <- generateFormPost $ memberForm mmember
-                     defaultLayout [whamlet|
+                     cbgLayout ["members", "list", "edit"] [whamlet|
                         <form method=post action=@{MemberR name} enctype=#{encType}>
                             ^{widget}
                             <button>Submit
@@ -740,7 +758,7 @@ postMemberR name = do
                                                 Left e -> return $ trace (show e) ()
                                                 _      -> return $ ()
                                             redirect MemberListR
-                   _                  -> defaultLayout [whamlet|
+                   _                  -> cbgLayout ["members", "list", "edit"] [whamlet|
                                              <p>Da stimmt etwas nicht, versuch's nochmal
                                              <form method=post action=@{MemberR name} enctype=#{enctype}>
                                                  ^{widget}
@@ -750,7 +768,7 @@ postMemberR name = do
 getMemberListR :: Handler TypedContent
 getMemberListR = selectRep $ do
     provideRep $ renderMembers $ \members ->
-                defaultLayout [whamlet|
+                cbgLayout ["members", "list"] [whamlet|
                     <table>
                         <tr>
                             <th>Vorname
@@ -786,7 +804,7 @@ getMemberListR = selectRep $ do
                   Right members -> as members
         memberId member = T.concat [name member, (pack " "), firstname member]
         getMemberList :: Node -> RepositoryContext [Member]
-        getMemberList node = getChildNodes node >>= return . (map fromNode)
+        getMemberList node = getChildNodes node >>= return . sort . (map fromNode)
 
 
 ------------------------------------------------------------------------------------------
