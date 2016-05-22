@@ -15,6 +15,8 @@ Executable CBGWebSite
   Default-Language: Haskell2010
   Build-Depends: base
                , bytestring
+               , conduit
+               , conduit-extra
                , directory
                , text
                , yesod

@@ -8,15 +8,17 @@ module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery ( Gallery(gallery_name, g
                                                        , gallery_remove_image
                                                        , image_read
                                                        , image_blob
+                                                       , image_write
                                                        ) where
 
 -- CBG
 import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
+import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
 
 -- other
 import Control.Monad        (filterM)
 import Data.ByteString.Lazy (ByteString)
-import Data.DateTime        (DateTime, startOfTime, fromSqlString, toSqlString)
+import Data.DateTime        (DateTime, startOfTime, fromSqlString, toSqlString, getCurrentTime)
 import Data.Maybe           (fromMaybe)
 import System.FilePath      ((</>))
 import Data.Ord             (Ord, compare)
@@ -126,9 +128,17 @@ image_read repo gname iname = do
     inode    <- getNode repo (urlFromString $ gname </> iname)
     return $ fromNode inode
 
---exported
+--exported, deprecated: use conduit or sendFile
 image_blob :: Image -> RepositoryContext ByteString
 image_blob image = do
     let inode = toNode undefined undefined image
     readBlobProperty inode "image"
 
+--exported
+image_write :: Repository -> String -> String -> String -> String -> ByteString -> RepositoryContext ()
+image_write repo gname iname contentType uploadedBy bytes = do
+    now <- check getCurrentTime
+    let image = Image repo iname contentType gname uploadedBy now
+    let inode = toNode undefined undefined image
+    writeNode inode
+    writeBlobProperty inode "image" bytes

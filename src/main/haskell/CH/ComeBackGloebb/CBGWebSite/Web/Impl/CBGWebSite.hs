@@ -15,7 +15,7 @@ import Text.Hamlet
 import Yesod.Auth
 import Yesod.Auth.GoogleEmail2
 import Network.HTTP.Conduit (Manager, conduitManagerSettings, newManager)
-import Network.Wai (pathInfo, responseLBS)
+import Network.Wai (pathInfo, responseLBS, requestHeaders)
 import Network.HTTP.Types (status200)
 
 -- other imports
@@ -33,10 +33,12 @@ import Data.Maybe (fromMaybe)
 import Control.Applicative ((<$>), (<*>))
 import Data.DateTime
 import Control.Exception.Base (throwIO)
-import Data.List (deleteBy)
 import System.FilePath (joinPath)
 import qualified Data.ByteString.UTF8 as U8
-import Data.List (elemIndex)
+import Data.Ord (Ord, compare)
+import qualified Data.ByteString as B
+import Data.Conduit
+import qualified Data.Conduit.Binary as CB
 
 staticFiles "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static"
 
@@ -69,6 +71,7 @@ mkYesod "CBGWebSite" [parseRoutes|
     /gallery/#Text/images            GalleryImagesR        GET
     /gallery/#Text/image/#Text       GalleryImageR         GET POST DELETE
     /image/#Text/#Text               ImageR                GET
+    /upload/image/#Text              UploadImageR          POST
 |]
 
 instance Yesod CBGWebSite where
@@ -127,6 +130,8 @@ instance Yesod CBGWebSite where
     isAuthorized (GalleryImageR _ _)    False = isAuthorized MembersR False
 
     isAuthorized (ImageR _ _)           False = isAuthorized MembersR False
+
+    isAuthorized (UploadImageR _)       True  = isAuthorized MembersR False
 
     -- everything else
     isAuthorized _                      _     = return $ Unauthorized ""
@@ -839,13 +844,33 @@ getGalleryR gname = selectRep $ do
             Left  e         -> do $logError $ pack $ show e
                                   fail "Internal error while trying to list galleries."
             Right gallery ->
-                cbgLayout ["gallery", gname] [whamlet|
-                    <h1>#{gname}
-                    <div .row>
-                        $forall iname <- map pack $ gallery_images gallery
-                            <a href=@{GalleryImageR gname iname}>
-                                <img src=@{ImageR gname iname} alt=#{iname} width=171>
-                |]
+                cbgLayout ["gallery", gname] $ do
+                    [whamlet|
+                        <h1>#{gname}
+                        <div .row>
+                            $forall iname <- map pack $ gallery_images gallery
+                                <a href=@{GalleryImageR gname iname}>
+                                    <img src=@{ImageR gname iname} alt=#{iname} width=171>
+                            <input #fileinput type=file multiple=multiple accept="image/*">
+                        <script>
+                            function uploadFile(file) {
+                                var xhr = new XMLHttpRequest();
+                                var fd  = new FormData();
+                                xhr.open('POST', '@{UploadImageR gname}', true);
+                                xhr.onreadystatechange = function() {
+                                    if (xhr.readyState == 4 && xhr.status == 200) {
+                                        console.log("upload successful: " + xhr.responseText);
+                                    }
+                                };
+                                fd.append('upload_file', file);
+                                xhr.send(fd);
+                            }
+                            document.querySelector('#fileinput').addEventListener('change', function() {
+                                for (var i = 0; i < this.files.length; ++i) {
+                                    uploadFile(this.files[i]);
+                                }
+                            });
+                    |]
 
 postGalleryR :: Text -> Handler Html
 postGalleryR name = undefined
@@ -930,3 +955,27 @@ getImageR gname iname = do
             fail "Internal error while trying to load image."
         Right (image, blob) ->
             sendWaiResponse $ responseLBS status200 [("Content-Type",  U8.fromString $ image_type image)] blob
+
+postUploadImageR :: Text -> Handler Html
+postUploadImageR gname = do
+    (_, files) <- runRequestBody
+    mauthUser <- maybeAuthId
+    case mauthUser of
+        Nothing -> permissionDenied ""
+        Just userName -> do
+            let upload (_, file) = do
+                  app <- getYesod
+                  let iname = fileName file
+                  let type' = fileContentType file
+                  bytes <- runConduit $ fileSource file $$ CB.sinkLbs
+                  eitherResult <- liftIO $
+                      runEitherT $ image_write (galleryRepo app) (unpack gname) (unpack iname) (unpack type') (unpack userName) bytes
+                  case eitherResult of
+                      Left e -> do
+                          $logError $ pack $ show e
+                          fail "Internal error while trying to save image."
+                      Right _ -> return ()
+            mapM_ upload files
+            cbgLayout ["upload", "image"] [whamlet|
+                <h1>File upload status
+            |]
