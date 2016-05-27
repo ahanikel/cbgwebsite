@@ -1,4 +1,6 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeSynonymInstances  #-}
 
 module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.FileStorage
     --( test_runTransaction
@@ -6,20 +8,26 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.FileStorage
     --)
 where
 
-import CH.ComeBackGloebb.CBGWebSite.Repo.Class      (Repository(..))
-import CH.ComeBackGloebb.CBGWebSite.Repo.Types
-import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils (check)
+import           CH.ComeBackGloebb.CBGWebSite.Repo.Class      (Repository (..))
+import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils (check)
+import           CH.ComeBackGloebb.CBGWebSite.Repo.Types
 
-import Control.Monad                                (when, filterM)
-import Control.Monad.Writer                         (Writer, runWriter, tell)
-import Control.Monad.Trans.Either                   (runEitherT, left)
-import Control.Exception                            (throwIO)
-import Data.Hash.MD5                                (md5s, Str(..))
-import Data.UUID                                    (nil, fromString)
-import Data.UUID.V4                                 (nextRandom)
-import System.FilePath                              ((</>))
-import System.IO                                    (appendFile)
-import System.Directory                             (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeDirectoryRecursive, removeFile, getDirectoryContents)
+import           Control.Exception                            (throwIO)
+import           Control.Monad                                (filterM, when)
+import           Control.Monad.Trans.Either                   (left, runEitherT)
+import           Control.Monad.Writer                         (Writer,
+                                                               runWriter, tell)
+import           Data.Hash.MD5                                (Str (..), md5s)
+import           Data.UUID                                    (fromString, nil)
+import           Data.UUID.V4                                 (nextRandom)
+import           System.Directory                             (createDirectoryIfMissing,
+                                                               doesDirectoryExist,
+                                                               doesFileExist,
+                                                               getDirectoryContents,
+                                                               removeDirectoryRecursive,
+                                                               removeFile)
+import           System.FilePath                              ((</>))
+import           System.IO                                    (appendFile)
 
 
 ------------------------------------------------------------------------------------

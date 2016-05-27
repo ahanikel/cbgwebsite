@@ -32,16 +32,23 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     )
 where
 
-import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
-import System.Directory (getDirectoryContents, doesFileExist, doesDirectoryExist, createDirectoryIfMissing)
-import Control.Monad (filterM, liftM)
-import System.FilePath (normalise, splitDirectories, (</>))
-import Control.Monad.Trans.Either (EitherT, left, runEitherT)
-import System.IO.Error (userError)
-import Data.List (intercalate, isSuffixOf)
-import System.Process (rawSystem)
-import System.Exit (ExitCode (..))
-import qualified Data.ByteString.Lazy as BL
+import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
+import           Control.Monad                                (filterM, liftM)
+import           Control.Monad.Trans.Either                   (EitherT, left,
+                                                               runEitherT)
+import qualified Data.ByteString.Lazy                         as BL
+import           Data.List                                    (intercalate,
+                                                               isSuffixOf)
+import           System.Directory                             (createDirectoryIfMissing,
+                                                               doesDirectoryExist,
+                                                               doesFileExist,
+                                                               getDirectoryContents)
+import           System.Exit                                  (ExitCode (..))
+import           System.FilePath                              (normalise,
+                                                               splitDirectories,
+                                                               (</>))
+import           System.IO.Error                              (userError)
+import           System.Process                               (rawSystem)
 
 -- exported
 data Repository = Repository { root :: FilePath
@@ -56,11 +63,11 @@ openRepository = Repository
 type PathComponent = String
 
 -- exported
-pathCompFromFilePath :: FilePath -> PathComponent 
+pathCompFromFilePath :: FilePath -> PathComponent
 pathCompFromFilePath = init . init -- remove ".n"/".p" suffix
 
 -- exported
-pathCompFromString :: String -> PathComponent 
+pathCompFromString :: String -> PathComponent
 pathCompFromString = id
 
 -- exported
@@ -99,16 +106,16 @@ instance Show Value where
     show (BooleanValue b) = show b
 
 -- exported
-data Property = Property { prop_name :: String
+data Property = Property { prop_name  :: String
                          , prop_value :: Value
                          }
     deriving (Read, Show, Eq)
 
 -- exported
-data Node = Node { node_name        :: String
-                 , node_path        :: URL
-                 , node_props       :: ![Property]
-                 , node_repo        :: Repository
+data Node = Node { node_name  :: String
+                 , node_path  :: URL
+                 , node_props :: ![Property]
+                 , node_repo  :: Repository
                  }
     deriving (Read, Show, Eq)
 

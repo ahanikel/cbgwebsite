@@ -1,44 +1,66 @@
-{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings, MultiParamTypeClasses, ViewPatterns, RecordWildCards, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE QuasiQuotes           #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeFamilies          #-}
+
+{-# LANGUAGE ViewPatterns          #-}
 
 module CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite where
 
 -- CBG
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
-import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
-import CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery
+import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery
+import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
+import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
+import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
 
 -- Yesod
-import Yesod hiding (deleteBy, joinPath)
-import Yesod.Static
-import Text.Hamlet
-import Yesod.Auth
-import Yesod.Auth.GoogleEmail2
-import Network.HTTP.Conduit (Manager, conduitManagerSettings, newManager)
-import Network.Wai (pathInfo, responseLBS, requestHeaders)
-import Network.HTTP.Types (status200)
+import           Network.HTTP.Conduit                              (Manager, conduitManagerSettings,
+                                                                    newManager)
+import           Network.HTTP.Types                                (status200)
+import           Network.Wai                                       (pathInfo, requestHeaders,
+                                                                    responseLBS)
+import           Text.Hamlet
+import           Yesod                                             hiding
+                                                                    (deleteBy,
+                                                                    joinPath)
+import           Yesod.Auth
+import           Yesod.Auth.GoogleEmail2
+import           Yesod.Static
 
 -- other imports
-import Control.Concurrent (MVar, newMVar)
-import Data.Text (Text, unpack, pack)
-import qualified Data.Text as T
-import Control.Monad (filterM, liftM)
-import Data.List (intercalate, deleteBy, elemIndex, sort)
-import Control.Exception (IOException)
-import Data.Aeson (encode, object)
-import Control.Monad.Trans.Either (runEitherT, left)
-import Data.Foldable (foldrM)
-import Debug.Trace
-import Data.Maybe (fromMaybe)
-import Control.Applicative ((<$>), (<*>))
-import Data.DateTime
-import Control.Exception.Base (throwIO)
-import System.FilePath (joinPath)
-import qualified Data.ByteString.UTF8 as U8
-import Data.Ord (Ord, compare)
-import qualified Data.ByteString as B
-import Data.Conduit
-import qualified Data.Conduit.Binary as CB
+import           Control.Applicative                               ((<$>),
+                                                                    (<*>))
+import           Control.Concurrent                                (MVar,
+                                                                    newMVar)
+import           Control.Exception                                 (IOException)
+import           Control.Exception.Base                            (throwIO)
+import           Control.Monad                                     (filterM,
+                                                                    liftM)
+import           Control.Monad.Trans.Either                        (left,
+                                                                    runEitherT)
+import           Data.Aeson                                        (encode,
+                                                                    object)
+import qualified Data.ByteString                                   as B
+import qualified Data.ByteString.UTF8                              as U8
+import           Data.Conduit
+import qualified Data.Conduit.Binary                               as CB
+import           Data.DateTime
+import           Data.Foldable                                     (foldrM)
+import           Data.List                                         (deleteBy,
+                                                                    elemIndex,
+                                                                    intercalate,
+                                                                    sort)
+import           Data.Maybe                                        (fromMaybe)
+import           Data.Ord                                          (Ord,
+                                                                    compare)
+import           Data.Text                                         (Text, pack,
+                                                                    unpack)
+import qualified Data.Text                                         as T
+import           Debug.Trace
+import           System.FilePath                                   (joinPath)
 
 staticFiles "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static"
 
@@ -694,7 +716,7 @@ instance Ord Member where
   compare a b = compare (key a) (key b)
     where
       key m = (show $ name m) ++ (show $ firstname m)
-  
+
 instance ToJSON Member where
     toJSON Member {..} = object ["firstname"  .= firstname
                                 ,"name"       .= name

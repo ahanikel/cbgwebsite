@@ -12,22 +12,26 @@ module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery ( Gallery(gallery_name, g
                                                        ) where
 
 -- CBG
-import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
-import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
+import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
+import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
 
 -- other
-import Control.Monad        (filterM)
-import Data.ByteString.Lazy (ByteString)
-import Data.DateTime        (DateTime, startOfTime, fromSqlString, toSqlString, getCurrentTime)
-import Data.Maybe           (fromMaybe)
-import System.FilePath      ((</>))
-import Data.Ord             (Ord, compare)
-import Data.List            (sort)
+import           Control.Monad                                     (filterM)
+import           Data.ByteString.Lazy                              (ByteString)
+import           Data.DateTime                                     (DateTime, fromSqlString,
+                                                                    getCurrentTime,
+                                                                    startOfTime,
+                                                                    toSqlString)
+import           Data.List                                         (sort)
+import           Data.Maybe                                        (fromMaybe)
+import           Data.Ord                                          (Ord,
+                                                                    compare)
+import           System.FilePath                                   ((</>))
 
-data Gallery = Gallery { gallery_repo       :: Repository
-                       , gallery_name       :: String
-                       , gallery_images     :: [String]
-                       , gallery_sort_key   :: String
+data Gallery = Gallery { gallery_repo     :: Repository
+                       , gallery_name     :: String
+                       , gallery_images   :: [String]
+                       , gallery_sort_key :: String
                        }
                deriving (Show, Eq)
 

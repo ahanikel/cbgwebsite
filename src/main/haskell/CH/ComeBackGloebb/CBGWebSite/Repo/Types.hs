@@ -2,12 +2,12 @@
 
 module CH.ComeBackGloebb.CBGWebSite.Repo.Types where
 
-import Control.Monad                                (Monad)
-import Control.Monad.Writer                         (MonadWriter, Writer)
-import Control.Applicative                          (Applicative)
-import Data.Functor                                 (Functor)
-import Data.DateTime                                (DateTime)
-import Data.UUID                                    (UUID)
+import           Control.Applicative  (Applicative)
+import           Control.Monad        (Monad)
+import           Control.Monad.Writer (MonadWriter, Writer)
+import           Data.DateTime        (DateTime)
+import           Data.Functor         (Functor)
+import           Data.UUID            (UUID)
 
 newtype PathComponent = PathComponent String
     deriving (Show)
@@ -24,9 +24,9 @@ data Property = Property { prop_name  :: String
                          }
     deriving (Show)
 
-data Value    = StringValue   { string_value   :: String }
-              | IntegerValue  { integer_value  :: Integer }
-              | BooleanValue  { boolean_value  :: Bool }
+data Value    = StringValue   { string_value :: String }
+              | IntegerValue  { integer_value :: Integer }
+              | BooleanValue  { boolean_value :: Bool }
               | DateTimeValue { datetime_value :: DateTime }
     deriving (Show, Read, Eq)
 

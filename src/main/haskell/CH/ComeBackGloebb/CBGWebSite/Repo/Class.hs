@@ -1,9 +1,10 @@
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
 module CH.ComeBackGloebb.CBGWebSite.Repo.Class where
 
-import CH.ComeBackGloebb.CBGWebSite.Repo.Types
-import Control.Monad                                (Monad)
-import Control.Monad.Trans.Either                   (EitherT)
+import           CH.ComeBackGloebb.CBGWebSite.Repo.Types
+import           Control.Monad                           (Monad)
+import           Control.Monad.Trans.Either              (EitherT)
 
 class Monad m => Repository r m | m -> r where
     r_getTransaction :: TransactionContext a  -> EitherT IOError m Transaction

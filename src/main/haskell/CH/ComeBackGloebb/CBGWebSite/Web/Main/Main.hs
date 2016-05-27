@@ -1,15 +1,16 @@
 -- CBG
-import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite
-import           CH.ComeBackGloebb.CBGWebSite.Repo.Repository
 import qualified CH.ComeBackGloebb.CBGWebSite.Repo.Impl.FileStorage as N
+import           CH.ComeBackGloebb.CBGWebSite.Repo.Repository
+import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite
 
 -- Yesod
-import Yesod
-import Yesod.Static
-import Network.HTTP.Conduit (Manager, conduitManagerSettings, newManager)
-import Control.Concurrent (newMVar)
+import           Control.Concurrent                                 (newMVar)
+import           Network.HTTP.Conduit                               (Manager, conduitManagerSettings,
+                                                                     newManager)
+import           Yesod
+import           Yesod.Static
 
-import Data.Text (pack)
+import           Data.Text                                          (pack)
 
 main = do sem            <- newMVar True
           staticSettings <- static "static"
