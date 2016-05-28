@@ -19,7 +19,7 @@ main = do sem            <- newMVar True
           clientSecret   <- readFile "google.clientSecret"
           warp 8080 $
             CBGWebSite staticSettings sem manager
-                (Repository "content")
+                (Repository "data/content")
                 (Repository "data/members")
                 (Repository "data/calendar")
                 (Repository "data/galleries")
