@@ -38,6 +38,8 @@ Executable CBGWebSite
                , transformers
                , MissingH
                , utf8-string
+               , warp
+               , warp-tls
   Hs-Source-Dirs: src/main/haskell
 
 test-suite test

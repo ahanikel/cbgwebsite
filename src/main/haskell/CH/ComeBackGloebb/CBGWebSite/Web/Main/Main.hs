@@ -7,17 +7,25 @@ import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite
 import           Control.Concurrent                                 (newMVar)
 import           Network.HTTP.Conduit                               (Manager, conduitManagerSettings,
                                                                      newManager)
-import           Yesod
-import           Yesod.Static
+import           Network.Wai.Handler.Warp                           (defaultSettings,
+                                                                     setPort)
+import           Network.Wai.Handler.WarpTLS                        (runTLS,
+                                                                     tlsSettings)
+import           Yesod                                              (toWaiApp,
+                                                                     warp)
+import           Yesod.Static                                       (static)
 
 import           Data.Text                                          (pack)
 
-main = do sem            <- newMVar True
-          staticSettings <- static "static"
-          manager        <- newManager conduitManagerSettings
-          clientId       <- readFile "google.clientId"
-          clientSecret   <- readFile "google.clientSecret"
-          warp 8080 $
+main = do sem                <- newMVar True
+          staticSettings     <- static "static"
+          manager            <- newManager conduitManagerSettings
+          clientId           <- readFile "google.clientId"
+          clientSecret       <- readFile "google.clientSecret"
+          let warpSettings    = setPort 8080 defaultSettings
+              warpTlsSettings = tlsSettings "server.crt" "server.key"
+
+          app <- toWaiApp $
             CBGWebSite staticSettings sem manager
                 (Repository "data/content")
                 (Repository "data/members")
@@ -25,3 +33,5 @@ main = do sem            <- newMVar True
                 (Repository "data/galleries")
                 (pack clientId)
                 (pack clientSecret)
+
+          runTLS warpTlsSettings warpSettings app

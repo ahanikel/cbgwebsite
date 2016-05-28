@@ -98,7 +98,7 @@ mkYesod "CBGWebSite" [parseRoutes|
 
 instance Yesod CBGWebSite where
     defaultLayout                             = cbgLayout []
-    approot                                   = ApprootStatic "http://localhost:8080"
+    approot                                   = ApprootStatic "https://test.comebackgloebb.ch"
     -- isAuthorized route isWriteRequest? = ...
     isAuthorized RootR                  False = return Authorized
     isAuthorized FavR                   False = return Authorized
