@@ -15,7 +15,12 @@ import           Yesod                                              (toWaiApp,
                                                                      warp)
 import           Yesod.Static                                       (static)
 
+import           Control.Monad.Logger                               (runStderrLoggingT)
+import           Control.Monad.Trans                                (liftIO)
 import           Data.Text                                          (pack)
+import           Database.Persist.Sqlite                            (runMigration,
+                                                                     runSqlPool,
+                                                                     withSqlitePool)
 
 main = do sem                <- newMVar True
           staticSettings     <- static "static"
@@ -25,13 +30,16 @@ main = do sem                <- newMVar True
           let warpSettings    = setPort 8080 defaultSettings
               warpTlsSettings = tlsSettings "server.crt" "server.key"
 
-          app <- toWaiApp $
-            CBGWebSite staticSettings sem manager
-                (Repository "data/content")
-                (Repository "data/members")
-                (Repository "data/calendar")
-                (Repository "data/galleries")
-                (pack clientId)
-                (pack clientSecret)
-
-          runTLS warpTlsSettings warpSettings app
+          runStderrLoggingT $ withSqlitePool (pack "cbgusers.sqlite") 10 $ \pool -> do
+            runSqlPool (runMigration migrateAll) pool
+            liftIO $ do
+              app <- toWaiApp $
+                CBGWebSite staticSettings sem manager
+                    (Repository "data/content")
+                    (Repository "data/members")
+                    (Repository "data/calendar")
+                    (Repository "data/galleries")
+                    (pack clientId)
+                    (pack clientSecret)
+                    pool
+              runTLS warpTlsSettings warpSettings app

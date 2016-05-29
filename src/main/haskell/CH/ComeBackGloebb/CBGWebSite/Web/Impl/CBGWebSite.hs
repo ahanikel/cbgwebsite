@@ -1,10 +1,13 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE QuasiQuotes           #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE QuasiQuotes                #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 {-# LANGUAGE ViewPatterns          #-}
 
@@ -27,6 +30,7 @@ import           Yesod                                             hiding
                                                                     (deleteBy,
                                                                     joinPath)
 import           Yesod.Auth
+import           Yesod.Auth.Account
 import           Yesod.Auth.GoogleEmail2
 import           Yesod.Static
 
@@ -43,7 +47,7 @@ import           Control.Monad.Trans.Either                        (left,
                                                                     runEitherT)
 import           Data.Aeson                                        (encode,
                                                                     object)
-import qualified Data.ByteString                                   as B
+import           Data.ByteString                                   (ByteString)
 import qualified Data.ByteString.UTF8                              as U8
 import           Data.Conduit
 import qualified Data.Conduit.Binary                               as CB
@@ -59,8 +63,28 @@ import           Data.Ord                                          (Ord,
 import           Data.Text                                         (Text, pack,
                                                                     unpack)
 import qualified Data.Text                                         as T
+import           Database.Persist.Sqlite                           (ConnectionPool,
+                                                                    SqlBackend,
+                                                                    runSqlPool)
+import           Database.Persist.TH                               (mkMigrate,
+                                                                    mkPersist,
+                                                                    persistUpperCase,
+                                                                    share,
+                                                                    sqlSettings)
 import           Debug.Trace
 import           System.FilePath                                   (joinPath)
+
+share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistUpperCase|
+User
+    username Text
+    UniqueUsername username
+    password ByteString
+    emailAddress Text
+    verified Bool
+    verifyKey Text
+    resetPasswordKey Text
+    deriving Show
+|]
 
 staticFiles "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static"
 
@@ -73,6 +97,7 @@ data CBGWebSite = CBGWebSite { getStatic    :: Static
                              , galleryRepo  :: Repository
                              , clientId     :: Text
                              , clientSecret :: Text
+                             , dbPool       :: ConnectionPool
                              }
 
 mkYesod "CBGWebSite" [parseRoutes|
@@ -165,12 +190,32 @@ instance YesodAuth CBGWebSite where
     type AuthId CBGWebSite           = Text
     getAuthId                        = return . Just . credsIdent
     loginDest _                      = MembersR
-    logoutDest _                     = MembersR
-    authPlugins                      = \self -> [ authGoogleEmail (clientId self) (clientSecret self) ]
+    logoutDest _                     = RootR
+    authPlugins                      = \self -> [ authGoogleEmail (clientId self) (clientSecret self), accountPlugin ]
     authHttpManager                  = httpManager
     maybeAuthId                      = lookupSession "_ID"
 
---instance YesodJQuery CBGWebSite
+instance YesodPersist CBGWebSite where
+    type YesodPersistBackend CBGWebSite = SqlBackend
+    runDB action = do
+        pool <- getYesod >>= return . dbPool
+        runSqlPool action pool
+
+instance AccountSendEmail CBGWebSite
+
+instance YesodAuthAccount (AccountPersistDB CBGWebSite User) CBGWebSite where
+    runAccountDB = runAccountPersistDB
+
+instance PersistUserCredentials User where
+    userUsernameF = UserUsername
+    userPasswordHashF = UserPassword
+    userEmailF = UserEmailAddress
+    userEmailVerifiedF = UserVerified
+    userEmailVerifyKeyF = UserVerifyKey
+    userResetPwdKeyF = UserResetPasswordKey
+    uniqueUsername = UniqueUsername
+
+    userCreate name email key pwd = User name pwd email False key ""
 
 cbgLayout :: [Text] -> Widget -> Handler Html
 cbgLayout path widget = do pageContent  <- widgetToPageContent widget

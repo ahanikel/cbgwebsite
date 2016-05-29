@@ -40,6 +40,11 @@ Executable CBGWebSite
                , utf8-string
                , warp
                , warp-tls
+               , yesod-auth-account
+               , persistent
+               , persistent-sqlite
+               , persistent-template
+               , monad-logger
   Hs-Source-Dirs: src/main/haskell
 
 test-suite test
