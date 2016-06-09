@@ -21,6 +21,7 @@ Executable CBGWebSite
                , text
                , yesod
                , yesod-auth
+               , yesod-auth-account
                , yesod-static
                , wai
                , shakespeare
@@ -40,7 +41,6 @@ Executable CBGWebSite
                , utf8-string
                , warp
                , warp-tls
-               , yesod-auth-account
                , persistent
                , persistent-sqlite
                , persistent-template
