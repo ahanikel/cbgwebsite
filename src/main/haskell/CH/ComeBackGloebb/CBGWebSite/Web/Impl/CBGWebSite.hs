@@ -191,14 +191,14 @@ instance YesodAuth CBGWebSite where
     getAuthId                        = return . Just . credsIdent
     loginDest _                      = MembersR
     logoutDest _                     = RootR
-    authPlugins                      = \self -> [ authGoogleEmail (clientId self) (clientSecret self), accountPlugin ]
+    authPlugins self                 = [ authGoogleEmail (clientId self) (clientSecret self), accountPlugin ]
     authHttpManager                  = httpManager
     maybeAuthId                      = lookupSession "_ID"
 
 instance YesodPersist CBGWebSite where
     type YesodPersistBackend CBGWebSite = SqlBackend
     runDB action = do
-        pool <- getYesod >>= return . dbPool
+        pool <- liftM dbPool getYesod
         runSqlPool action pool
 
 instance AccountSendEmail CBGWebSite
@@ -354,8 +354,7 @@ getEditContentR (ContentPath pieces) = do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
-        node <- getNode (contentRepo app) url
-        return node
+        getNode (contentRepo app) url
     (prop, title) <- case eitherNode of
         Left ioe -> notFound
         Right node | node_path node == [] -> redirect ("/content/welcome" :: String)
@@ -377,8 +376,7 @@ postEditContentR (ContentPath pieces) = do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
-        node <- getNode (contentRepo app) url
-        return node
+        getNode (contentRepo app) url
     case eitherNode of
         Left ioe -> notFound
         Right node | node_path node == [] -> notFound
@@ -398,8 +396,7 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
         let url = map unpack pieces
-        node <- getNode (contentRepo app) url
-        return node
+        getNode (contentRepo app) url
     case eitherNode of
         Left ioe -> notFound
         Right node | node_path node == [] -> redirect ("/content/welcome" :: String)
@@ -510,7 +507,7 @@ contentNavigation path = do app         <- getYesod
                                 welcome      <- getNode (node_repo node) ["welcome"]
                                 return (node, parent, siblings, children, welcome)
                             case eitherNodes of
-                                Left ioe -> do
+                                Left ioe ->
                                     return ()
                                 Right (node, parent, siblings, children, welcome) -> do
                                     let subnavi = [whamlet|
@@ -551,7 +548,7 @@ auditTrail path = do app         <- getYesod
                          node        <- getNode (contentRepo app) repoPath
                          getTrail node
                      case eitherNodes of
-                         Left ioe    -> do
+                         Left ioe    ->
                              return ()
                          Right nodes -> mapM_ encodeTrail nodes
     where encodeTrail n = [whamlet|<li .menu-123 .collapsed>
@@ -593,10 +590,10 @@ getContentUrlFromNode :: Node -> String
 getContentUrlFromNode = ("/content/" ++) . urlToString . node_path
 
 getTitlePropertyOrEmpty :: Node -> String
-getTitlePropertyOrEmpty = fromMaybe "" . fmap show . fmap prop_value . flip getProperty ("title" :: String)
+getTitlePropertyOrEmpty = maybe "" show . fmap prop_value . flip getProperty ("title" :: String)
 
 getTrail :: Node -> RepositoryContext [Node]
-getTrail node = do nodes       <- fmap tail $ getParentNodes node -- tail: omit root node
+getTrail node = do nodes       <- tail <$> getParentNodes node -- tail: omit root node
                    if nodes == []
                    then left $ userError "no root"
                    else do
@@ -616,11 +613,11 @@ getParentNodes node = foldrM appendToNodes [node] $ node_path node
 --- Member Calendar
 ------------------------------------------------------------------------------------------
 
-data Event = Event { ev_title       :: Text
-                   , ev_startDate   :: DateTime
-                   , ev_endDate     :: Maybe DateTime
-                   , ev_description :: Maybe Text
-                   , ev_location    :: Maybe Text
+data Event = Event { evTitle       :: Text
+                   , evStartDate   :: DateTime
+                   , evEndDate     :: Maybe DateTime
+                   , evDescription :: Maybe Text
+                   , evLocation    :: Maybe Text
                    } deriving (Show)
 
 instance Persistent Event where
@@ -635,19 +632,19 @@ instance Persistent Event where
 
     toNode repo eventName event = Node eventName
                                          (urlFromString eventName)
-                                         [ (Property "startDate"   $ StringValue $ toSqlString  $                    ev_startDate   event)
-                                         , (Property "endDate"     $ StringValue $ fromMaybe "" $ fmap toSqlString $ ev_endDate     event)
-                                         , (Property "description" $ StringValue $ unpack       $ fromMaybe ""     $ ev_description event)
-                                         , (Property "location"    $ StringValue $ unpack       $ fromMaybe ""     $ ev_location    event)
+                                         [ (Property "startDate"   $ StringValue $ toSqlString  $                    evStartDate   event)
+                                         , (Property "endDate"     $ StringValue $ fromMaybe "" $ fmap toSqlString $ evEndDate     event)
+                                         , (Property "description" $ StringValue $ unpack       $ fromMaybe ""     $ evDescription event)
+                                         , (Property "location"    $ StringValue $ unpack       $ fromMaybe ""     $ evLocation    event)
                                          ]
                                          repo
 
 instance ToJSON Event where
-    toJSON Event {..} = object [ "title"       .=                               ev_title
-                               , "startDate"   .=               toSqlString     ev_startDate
-                               , "endDate"     .= fromMaybe "" (toSqlString <$> ev_endDate)
-                               , "description" .= fromMaybe ""                  ev_description
-                               , "location"    .= fromMaybe ""                  ev_location
+    toJSON Event {..} = object [ "title"       .=                               evTitle
+                               , "startDate"   .=               toSqlString     evStartDate
+                               , "endDate"     .= fromMaybe "" (toSqlString <$> evEndDate)
+                               , "description" .= fromMaybe ""                  evDescription
+                               , "location"    .= fromMaybe ""                  evLocation
                                ]
 
 getMemberCalendarR :: Handler ()
@@ -670,11 +667,11 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
                     <th>Beschreibung
                 $forall event <- events
                     <tr>
-                        <td>#{               toSqlString  $  ev_startDate   event}
-                        <td>#{fromMaybe "" $ toSqlString <$> ev_endDate     event}
-                        <td>#{                               ev_title       event}
-                        <td>#{fromMaybe "" $                 ev_location    event}
-                        <td>#{fromMaybe "" $                 ev_description event}
+                        <td>#{               toSqlString  $  evStartDate   event}
+                        <td>#{fromMaybe "" $ toSqlString <$> evEndDate     event}
+                        <td>#{                               evTitle       event}
+                        <td>#{fromMaybe "" $                 evLocation    event}
+                        <td>#{fromMaybe "" $                 evDescription event}
                         <td>
                             <a href=@{EventR $ eventId event}>
                                 <button>Edit
@@ -690,23 +687,21 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
                   Right events -> as events
         url = map (pathCompFromString . show) [year, month]
         getEventList :: Node -> RepositoryContext [Event]
-        getEventList node = getChildNodesRecursively node >>= filterM (return . (== 4) . length . node_path) >>= return . (map fromNode)
-        eventId event = pack $ intercalate "/" [show year, show month, toSqlString $ ev_startDate event, unpack $ ev_title event]
-            where (year, month, _) = toGregorian' $ ev_startDate event
+        getEventList node = getChildNodesRecursively node >>= filterM (return . (== 4) . length . node_path) >>= return . map fromNode
+        eventId event = pack $ intercalate "/" [show year, show month, toSqlString $ evStartDate event, unpack $ evTitle event]
+            where (year, month, _) = toGregorian' $ evStartDate event
 
 eventForm :: Maybe Event -> Html -> MForm Handler (FormResult Event, Widget)
 eventForm mevent = renderDivs $ makeEvent
-    <$> areq textField "Titel"        (                                                   fmap ev_title       mevent)
-    <*> areq textField "Startdatum"   (fmap pack $ fmap toSqlString $                     fmap ev_startDate   mevent)
-    <*> aopt textField "Enddatum"     ((fmap $ fmap pack) $ (fmap $ fmap toSqlString) $   fmap ev_endDate     mevent)
-    <*> aopt textField "Beschreibung" (                                                   fmap ev_description mevent)
-    <*> aopt textField "Ort"          (                                                   fmap ev_location    mevent)
+    <$> areq textField "Titel"        (                                fmap evTitle       mevent)
+    <*> areq textField "Startdatum"   (     (pack . toSqlString) <$>   fmap evStartDate   mevent)
+    <*> aopt textField "Enddatum"     (fmap (pack . toSqlString) <$>   fmap evEndDate     mevent)
+    <*> aopt textField "Beschreibung" (                                fmap evDescription mevent)
+    <*> aopt textField "Ort"          (                                fmap evLocation    mevent)
   where makeEvent :: Text -> Text -> Maybe Text -> Maybe Text -> Maybe Text -> Event
-        makeEvent title start end desc loc = Event title
-                                                   (fromMaybe startOfTime $ fromSqlString $ unpack start)
-                                                   (fromMaybe Nothing     $ fromSqlString <$> unpack <$> end)
-                                                   desc
-                                                   loc
+        makeEvent title start end = Event title
+                                          (fromMaybe startOfTime $ fromSqlString $ unpack start)
+                                          (fromMaybe Nothing     $ fromSqlString <$> unpack <$> end)
 
 getEventR :: Text -> Handler Html
 getEventR name = do app               <- getYesod
@@ -730,8 +725,8 @@ postEventR name = do
                                            result <- liftIO $ writeItem (calendarRepo app) strName event
                                            case result of
                                                Left e -> return $ trace (show e) ()
-                                               _      -> return $ ()
-                                           let (year, month, _) = toGregorian' $ ev_startDate event
+                                               _      -> return ()
+                                           let (year, month, _) = toGregorian' $ evStartDate event
                                            redirect $ MemberCalendarMR (fromInteger year) month
                    _                 -> cbgLayout ["members", "event"] [whamlet|
                                             <p>Da stimmt etwas nicht, versuch's nochmal
@@ -760,7 +755,7 @@ data Member = Member { firstname :: Text
 instance Ord Member where
   compare a b = compare (key a) (key b)
     where
-      key m = (show $ name m) ++ (show $ firstname m)
+      key m = show (name m) ++ show (firstname m)
 
 instance ToJSON Member where
     toJSON Member {..} = object ["firstname"  .= firstname
@@ -783,17 +778,17 @@ instance Persistent Member where
                            (opt_property "mobile")
                            (opt_property "email")
       where req_property = pack . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
-            opt_property pname = (pack . show) <$> (liftM prop_value $ getProperty node pname)
+            opt_property pname = (pack . show) <$> liftM prop_value (getProperty node pname)
     toNode repo memberName member = Node memberName
                                          (urlFromString memberName)
-                                         [ (Property "firstname" $ StringValue $ unpack $                firstname member)
-                                         , (Property "name"      $ StringValue $ unpack $                name      member)
-                                         , (Property "address"   $ StringValue $ unpack $ fromMaybe "" $ address   member)
-                                         , (Property "locality"  $ StringValue $ unpack $ fromMaybe "" $ locality  member)
-                                         , (Property "status"    $ StringValue $ unpack $                status    member)
-                                         , (Property "phone"     $ StringValue $ unpack $ fromMaybe "" $ phone     member)
-                                         , (Property "mobile"    $ StringValue $ unpack $ fromMaybe "" $ mobile    member)
-                                         , (Property "email"     $ StringValue $ unpack $ fromMaybe "" $ email     member)
+                                         [ Property "firstname" $ StringValue $ unpack $                firstname member
+                                         , Property "name"      $ StringValue $ unpack $                name      member
+                                         , Property "address"   $ StringValue $ unpack $ fromMaybe "" $ address   member
+                                         , Property "locality"  $ StringValue $ unpack $ fromMaybe "" $ locality  member
+                                         , Property "status"    $ StringValue $ unpack $                status    member
+                                         , Property "phone"     $ StringValue $ unpack $ fromMaybe "" $ phone     member
+                                         , Property "mobile"    $ StringValue $ unpack $ fromMaybe "" $ mobile    member
+                                         , Property "email"     $ StringValue $ unpack $ fromMaybe "" $ email     member
                                          ]
                                          repo
 
@@ -828,7 +823,7 @@ postMemberR name = do
                                             result <- liftIO $ writeItem (memberRepo app) (unpack name) member
                                             case result of
                                                 Left e -> return $ trace (show e) ()
-                                                _      -> return $ ()
+                                                _      -> return ()
                                             redirect MemberListR
                    _                  -> cbgLayout ["members", "list", "edit"] [whamlet|
                                              <p>Da stimmt etwas nicht, versuch's nochmal
@@ -874,7 +869,7 @@ getMemberListR = selectRep $ do
                   Left  e       -> do $logError $ pack $ show e
                                       as ([] :: [Member])
                   Right members -> as members
-        memberId member = T.concat [name member, (pack " "), firstname member]
+        memberId member = T.concat [name member, pack " ", firstname member]
         getMemberList :: Node -> RepositoryContext [Member]
         getMemberList node = getChildNodes node >>= return . sort . (map fromNode)
 
@@ -884,7 +879,7 @@ getMemberListR = selectRep $ do
 ------------------------------------------------------------------------------------------
 
 getGalleriesR :: Handler TypedContent
-getGalleriesR = selectRep $ do
+getGalleriesR = selectRep $
     provideRep $ do
         app             <- getYesod
         eitherGalleries <- liftIO $ runEitherT $ list_galleries $ galleryRepo app
@@ -903,7 +898,7 @@ getGalleriesR = selectRep $ do
                 |]
 
 getGalleryR :: Text -> Handler TypedContent
-getGalleryR gname = selectRep $ do
+getGalleryR gname = selectRep $
     provideRep $ do
         app           <- getYesod
         eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (unpack gname)
@@ -911,7 +906,7 @@ getGalleryR gname = selectRep $ do
             Left  e         -> do $logError $ pack $ show e
                                   fail "Internal error while trying to list galleries."
             Right gallery ->
-                cbgLayout ["gallery", gname] $ do
+                cbgLayout ["gallery", gname] $
                     [whamlet|
                         <h1>#{gname}
                         <div .row>
@@ -946,7 +941,7 @@ deleteGalleryR :: Text -> Handler Html
 deleteGalleryR name = undefined
 
 getGalleryImagesR :: Text -> Handler TypedContent
-getGalleryImagesR gname = selectRep $ do
+getGalleryImagesR gname = selectRep $
     provideRep $ do
         app           <- getYesod
         eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (unpack gname)
@@ -967,7 +962,7 @@ getGalleryImagesR gname = selectRep $ do
 
 
 getGalleryImageR :: Text -> Text -> Handler TypedContent
-getGalleryImageR gname iname = selectRep $ do
+getGalleryImageR gname iname = selectRep $
     provideRep $ do
         app           <- getYesod
         eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (unpack gname)
