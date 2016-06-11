@@ -9,7 +9,7 @@
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeFamilies               #-}
 
-{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite where
 
@@ -357,7 +357,7 @@ getEditContentR (ContentPath pieces) = do
         getNode (contentRepo app) url
     (prop, title) <- case eitherNode of
         Left ioe -> notFound
-        Right node | node_path node == [] -> redirect ("/content/welcome" :: String)
+        Right node | null (node_path node) -> redirect ("/content/welcome" :: String)
         Right node -> do
             let prop  = case getProperty node "text.html" of
                              Just p  -> show $ prop_value p
@@ -379,7 +379,7 @@ postEditContentR (ContentPath pieces) = do
         getNode (contentRepo app) url
     case eitherNode of
         Left ioe -> notFound
-        Right node | node_path node == [] -> notFound
+        Right node | null (node_path node) -> notFound
         Right node -> do
           let props   = node_props node
               props'  = deleteBy (\ (Property a _) (Property b _) -> a == b) (Property "text.html" (StringValue "")) props
@@ -399,7 +399,7 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
         getNode (contentRepo app) url
     case eitherNode of
         Left ioe -> notFound
-        Right node | node_path node == [] -> redirect ("/content/welcome" :: String)
+        Right node | null (node_path node) -> redirect ("/content/welcome" :: String)
         Right node -> do
             let prop = case getProperty node "text.html" of
                            Just p  -> show $ prop_value p
@@ -594,7 +594,7 @@ getTitlePropertyOrEmpty = maybe "" show . fmap prop_value . flip getProperty ("t
 
 getTrail :: Node -> RepositoryContext [Node]
 getTrail node = do nodes       <- tail <$> getParentNodes node -- tail: omit root node
-                   if nodes == []
+                   if null nodes
                    then left $ userError "no root"
                    else do
                       welcome  <- getNode (node_repo node) (urlFromString "/welcome")
@@ -627,15 +627,15 @@ instance Persistent Event where
                           (dateProperty "endDate")
                           (textProperty "description")
                           (textProperty "location")
-      where textProperty p = pack <$> show <$> prop_value <$> getProperty node p
-            dateProperty = fromSqlString . show . fromMaybe (StringValue "") . fmap prop_value . getProperty node
+      where textProperty p = pack . show . prop_value <$> getProperty node p
+            dateProperty = fromSqlString . show . maybe (StringValue "") prop_value . getProperty node
 
     toNode repo eventName event = Node eventName
                                          (urlFromString eventName)
-                                         [ (Property "startDate"   $ StringValue $ toSqlString  $                    evStartDate   event)
-                                         , (Property "endDate"     $ StringValue $ fromMaybe "" $ fmap toSqlString $ evEndDate     event)
-                                         , (Property "description" $ StringValue $ unpack       $ fromMaybe ""     $ evDescription event)
-                                         , (Property "location"    $ StringValue $ unpack       $ fromMaybe ""     $ evLocation    event)
+                                         [ Property "startDate"   $ StringValue $          toSqlString        $ evStartDate   event
+                                         , Property "endDate"     $ StringValue $ maybe "" toSqlString        $ evEndDate     event
+                                         , Property "description" $ StringValue $ unpack       $ fromMaybe "" $ evDescription event
+                                         , Property "location"    $ StringValue $ unpack       $ fromMaybe "" $ evLocation    event
                                          ]
                                          repo
 
@@ -649,7 +649,7 @@ instance ToJSON Event where
 
 getMemberCalendarR :: Handler ()
 getMemberCalendarR = do
-    (year, month, _) <- liftIO $ getCurrentTime >>= return . toGregorian'
+    (year, month, _) <- liftIO $ liftM toGregorian' getCurrentTime
     redirect $ MemberCalendarMR (fromInteger year) month
 
 getMemberCalendarMR :: Int -> Int -> Handler TypedContent
@@ -679,15 +679,21 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
     provideRep $ renderEvents returnJson
   where renderEvents :: HasContentType a => ([Event] -> Handler a) -> Handler a
         renderEvents as = do
-              app           <- getYesod
-              eitherEvents  <- liftIO $ runEitherT $ getNode (calendarRepo app) url >>= getEventList
+              app          <- getYesod
+              eitherEvents <- liftIO $ runEitherT $ getNode (calendarRepo app) url >>= getEventList
               case eitherEvents of
-                  Left  e       -> do $logError $ pack $ show e
-                                      as ([] :: [Event])
+                  Left  e      -> do $logError $ pack $ show e
+                                     as ([] :: [Event])
                   Right events -> as events
+
         url = map (pathCompFromString . show) [year, month]
+
         getEventList :: Node -> RepositoryContext [Event]
-        getEventList node = getChildNodesRecursively node >>= filterM (return . (== 4) . length . node_path) >>= return . map fromNode
+        getEventList node = do
+         nodes     <- getChildNodesRecursively node
+         let nodes' = filter ((== 4) . length . node_path) nodes
+         return $ map fromNode nodes'
+
         eventId event = pack $ intercalate "/" [show year, show month, toSqlString $ evStartDate event, unpack $ evTitle event]
             where (year, month, _) = toGregorian' $ evStartDate event
 
@@ -700,8 +706,8 @@ eventForm mevent = renderDivs $ makeEvent
     <*> aopt textField "Ort"          (                                fmap evLocation    mevent)
   where makeEvent :: Text -> Text -> Maybe Text -> Maybe Text -> Maybe Text -> Event
         makeEvent title start end = Event title
-                                          (fromMaybe startOfTime $ fromSqlString $ unpack start)
-                                          (fromMaybe Nothing     $ fromSqlString <$> unpack <$> end)
+                                          (fromMaybe startOfTime $ fromSqlString $ unpack     start)
+                                          (fromMaybe Nothing     $ fromSqlString . unpack <$> end)
 
 getEventR :: Text -> Handler Html
 getEventR name = do app               <- getYesod
@@ -871,7 +877,7 @@ getMemberListR = selectRep $ do
                   Right members -> as members
         memberId member = T.concat [name member, pack " ", firstname member]
         getMemberList :: Node -> RepositoryContext [Member]
-        getMemberList node = getChildNodes node >>= return . sort . (map fromNode)
+        getMemberList node = liftM (sort . map fromNode) (getChildNodes node)
 
 
 ------------------------------------------------------------------------------------------
