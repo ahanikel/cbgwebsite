@@ -39,6 +39,7 @@ main = do sem                <- newMVar True
                     (Repository "data/members")
                     (Repository "data/calendar")
                     (Repository "data/galleries")
+                    (Repository "data/assets")
                     (pack clientId)
                     (pack clientSecret)
                     pool

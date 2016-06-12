@@ -14,6 +14,7 @@
 module CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite where
 
 -- CBG
+import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Asset
 import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
@@ -96,6 +97,7 @@ data CBGWebSite = CBGWebSite { getStatic    :: Static
                              , memberRepo   :: Repository
                              , calendarRepo :: Repository
                              , galleryRepo  :: Repository
+                             , assetRepo    :: Repository
                              , clientId     :: Text
                              , clientSecret :: Text
                              , dbPool       :: ConnectionPool
@@ -120,6 +122,7 @@ mkYesod "CBGWebSite" [parseRoutes|
     /gallery/#Text/image/#Text       GalleryImageR         GET POST DELETE
     /image/#Text/#Text               ImageR                GET
     /upload/image/#Text              UploadImageR          POST
+    /asset/+ContentPath              AssetR                GET
 |]
 
 instance Yesod CBGWebSite where
@@ -180,6 +183,9 @@ instance Yesod CBGWebSite where
     isAuthorized (ImageR _ _)           False = isAuthorized MembersR False
 
     isAuthorized (UploadImageR _)       True  = isAuthorized MembersR False
+
+    -- the assets
+    isAuthorized (AssetR _)             False = isAuthorized MembersR False
 
     -- everything else
     isAuthorized _                      _     = return $ Unauthorized ""
@@ -462,6 +468,8 @@ navigationWidget maybeAuthId path = do
                                                            <a href=@{MemberCalendarR} title=Kalender>Kalender
                                                        <li .leaf>
                                                            <a href=@{MemberListR} title=Mitgliederliste>Mitgliederliste
+                                                       <li .leaf>
+                                                           <a href=@{AssetR $ ContentPath ["Verein", "Statuten", "Statuten.pdf"]} title=Statuten>Statuten
                                                <li .collapsed>
                                                    <a href=@{GalleriesR} title=Fotoalben>Fotoalben
                                    |]
@@ -1074,3 +1082,19 @@ postUploadImageR gname = do
             cbgLayout ["upload", "image"] [whamlet|
                 <h1>File upload status
             |]
+
+
+------------------------------------------------------------------------------------------
+--- Assets
+------------------------------------------------------------------------------------------
+
+getAssetR :: ContentPath -> Handler ()
+getAssetR (ContentPath path) = do
+  repo <- liftM assetRepo getYesod
+  let filePath = intercalate "/" $ map T.unpack path
+  eitherAsset <- liftIO $ runEitherT $ assetRead repo filePath
+  case eitherAsset of
+    Left e -> do
+      $logError $ T.pack $ show e
+      notFound
+    Right asset -> sendFile (U8.fromString $ assetType asset) $ trace (show $ assetBlob asset) (assetBlob asset)
