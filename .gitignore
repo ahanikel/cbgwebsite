@@ -11,3 +11,10 @@ google*
 content
 data
 server.*
+*~
+accounts
+cbgusers.sqlite
+run
+deploy
+backup
+orig.cbgusers

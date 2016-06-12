@@ -5,6 +5,7 @@ $doctype 5
         <title>#{pageTitle pageContent}
         <link type=text/css rel=stylesheet media=screen href=@{StaticR defaults_css}>
         <link type=text/css rel=stylesheet media=screen href=@{StaticR garland_css}>
+        <link type=text/css rel=stylesheet media=screen href=@{StaticR cbg_css}>
         ^{pageHead pageContent}
     <body .sidebar-left>
         <div #header-region .clear-block>
