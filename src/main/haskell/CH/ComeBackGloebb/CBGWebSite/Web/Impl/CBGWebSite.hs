@@ -72,6 +72,7 @@ import           Database.Persist.TH                               (mkMigrate,
                                                                     share,
                                                                     sqlSettings)
 import           Debug.Trace
+import           Network.Mail.Mime
 import           System.FilePath                                   (joinPath)
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistUpperCase|
@@ -201,7 +202,31 @@ instance YesodPersist CBGWebSite where
         pool <- liftM dbPool getYesod
         runSqlPool action pool
 
-instance AccountSendEmail CBGWebSite
+instance AccountSendEmail CBGWebSite where
+    sendVerifyEmail uname email url = do
+        $(logInfo) $ T.concat [ "Verification email for "
+                              , uname
+                              , " (", email, "): "
+                              , url
+                              ]
+        liftIO $ renderSendMail $
+          simpleMail' (Address (Just uname) email)
+                      (Address (Just "Come Back Glöbb") "info@comebackgloebb.ch")
+                      (T.concat ["Verification email for ", uname])
+                      (TL.concat ["In order to verify your email address, please click this link: ", TL.fromStrict url])
+
+    sendNewPasswordEmail uname email url = do
+        $(logInfo) $ T.concat [ "Reset password email for "
+                              , uname
+                              , " (", email, "): "
+                              , url
+                              ]
+        liftIO $ renderSendMail $
+          simpleMail' (Address (Just uname) email)
+                      (Address (Just "Come Back Glöbb") "info@comebackgloebb.ch")
+                      (T.concat ["Password reset request for ", uname])
+                      (TL.concat ["We have received a password reset request for your account. If you didn't request a password reset, please ignore this email. If the request was indeed yours, please click the link in order to change your password.: ", TL.fromStrict url])
+
 
 instance YesodAuthAccount (AccountPersistDB CBGWebSite User) CBGWebSite where
     runAccountDB = runAccountPersistDB

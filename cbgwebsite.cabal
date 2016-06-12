@@ -45,6 +45,7 @@ Executable CBGWebSite
                , persistent-sqlite
                , persistent-template
                , monad-logger
+               , mime-mail
   Hs-Source-Dirs: src/main/haskell
 
 test-suite test
