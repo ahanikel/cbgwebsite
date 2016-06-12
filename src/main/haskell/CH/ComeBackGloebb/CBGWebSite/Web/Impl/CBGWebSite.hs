@@ -60,9 +60,9 @@ import           Data.List                                         (deleteBy,
 import           Data.Maybe                                        (fromMaybe)
 import           Data.Ord                                          (Ord,
                                                                     compare)
-import           Data.Text                                         (Text, pack,
-                                                                    unpack)
+import           Data.Text                                         (Text)
 import qualified Data.Text                                         as T
+import qualified Data.Text.Lazy                                    as TL
 import           Database.Persist.Sqlite                           (ConnectionPool,
                                                                     SqlBackend,
                                                                     runSqlPool)
@@ -353,7 +353,7 @@ getEditContentR :: ContentPath -> Handler Html
 getEditContentR (ContentPath pieces) = do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
-        let url = map unpack pieces
+        let url = map T.unpack pieces
         getNode (contentRepo app) url
     (prop, title) <- case eitherNode of
         Left ioe -> notFound
@@ -375,7 +375,7 @@ postEditContentR :: ContentPath -> Handler Html
 postEditContentR (ContentPath pieces) = do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
-        let url = map unpack pieces
+        let url = map T.unpack pieces
         getNode (contentRepo app) url
     case eitherNode of
         Left ioe -> notFound
@@ -384,7 +384,7 @@ postEditContentR (ContentPath pieces) = do
           let props   = node_props node
               props'  = deleteBy (\ (Property a _) (Property b _) -> a == b) (Property "text.html" (StringValue "")) props
           body <- runInputPost $ ireq textField "body"
-          let props'' = Property "text.html" (StringValue $ unpack body) : props'
+          let props'' = Property "text.html" (StringValue $ T.unpack body) : props'
           result <- liftIO $ runEitherT $ writeNode $ node { node_props = props'' }
           case result of
             Left ioe -> liftIO $ throwIO ioe
@@ -395,7 +395,7 @@ getContentR :: ContentPath -> Handler Html
 getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
     app <- getYesod
     eitherNode <- liftIO $ runEitherT $ do
-        let url = map unpack pieces
+        let url = map T.unpack pieces
         getNode (contentRepo app) url
     case eitherNode of
         Left ioe -> notFound
@@ -412,7 +412,7 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
 
 navigationWidget :: Maybe authId -> [Text] -> Widget
 navigationWidget maybeAuthId path = do
-    let path' =  map unpack path
+    let path' =  map T.unpack path
     let casePart = case maybeAuthId of
                        Just userid ->
                            case path' of
@@ -493,7 +493,7 @@ navigationWidget maybeAuthId path = do
 contentNavigation :: [Text] -> Widget
 contentNavigation path = do app         <- getYesod
                             eitherNodes <- liftIO $ runEitherT $ do
-                                let path'    =  map unpack path
+                                let path'    =  map T.unpack path
                                 let repoPath =  case path' of
                                                     ("content" : rest)          -> rest
                                                     ("edit" : "content" : rest) -> rest
@@ -540,7 +540,7 @@ contentNavigation path = do app         <- getYesod
 auditTrail :: [Text] -> Widget
 auditTrail path = do app         <- getYesod
                      eitherNodes <- liftIO $ runEitherT $ do
-                         let path'    = map unpack path
+                         let path'    = map T.unpack path
                          let repoPath = case path' of
                                             ("content" : rest)          -> rest
                                             ("edit" : "content" : rest) -> rest
@@ -563,7 +563,7 @@ galleryNavigation path = do
   eitherGalleries <- liftIO $ runEitherT $ list_galleries $ galleryRepo app
   case eitherGalleries of
     Left ioe -> do
-      $logError $ pack $ show (map unpack path) ++ "/galleryNavigation: " ++ show (ioe :: IOException)
+      $logError $ T.pack $ show (map T.unpack path) ++ "/galleryNavigation: " ++ show (ioe :: IOException)
       return ()
     Right galleries -> case path of
       ("galleries" : _)        -> mapM_ (renderGallery   Nothing)   galleries
@@ -572,7 +572,7 @@ galleryNavigation path = do
 
   where
     renderGallery maybeSelf g = do
-      let gname = pack $ gallery_name g
+      let gname = T.pack $ gallery_name g
       case maybeSelf of
         Just self | self == gname ->
           [whamlet|
@@ -622,20 +622,20 @@ data Event = Event { evTitle       :: Text
 
 instance Persistent Event where
 
-    fromNode node = Event (pack $ node_name node)
+    fromNode node = Event (T.pack $ node_name node)
                           (fromMaybe startOfTime $ dateProperty "startDate")
                           (dateProperty "endDate")
                           (textProperty "description")
                           (textProperty "location")
-      where textProperty p = pack . show . prop_value <$> getProperty node p
+      where textProperty p = T.pack . show . prop_value <$> getProperty node p
             dateProperty = fromSqlString . show . maybe (StringValue "") prop_value . getProperty node
 
     toNode repo eventName event = Node eventName
                                          (urlFromString eventName)
                                          [ Property "startDate"   $ StringValue $          toSqlString        $ evStartDate   event
                                          , Property "endDate"     $ StringValue $ maybe "" toSqlString        $ evEndDate     event
-                                         , Property "description" $ StringValue $ unpack       $ fromMaybe "" $ evDescription event
-                                         , Property "location"    $ StringValue $ unpack       $ fromMaybe "" $ evLocation    event
+                                         , Property "description" $ StringValue $ T.unpack     $ fromMaybe "" $ evDescription event
+                                         , Property "location"    $ StringValue $ T.unpack     $ fromMaybe "" $ evLocation    event
                                          ]
                                          repo
 
@@ -682,7 +682,7 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
               app          <- getYesod
               eitherEvents <- liftIO $ runEitherT $ getNode (calendarRepo app) url >>= getEventList
               case eitherEvents of
-                  Left  e      -> do $logError $ pack $ show e
+                  Left  e      -> do $logError $ T.pack $ show e
                                      as ([] :: [Event])
                   Right events -> as events
 
@@ -694,24 +694,24 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
          let nodes' = filter ((== 4) . length . node_path) nodes
          return $ map fromNode nodes'
 
-        eventId event = pack $ intercalate "/" [show year, show month, toSqlString $ evStartDate event, unpack $ evTitle event]
+        eventId event = T.pack $ intercalate "/" [show year, show month, toSqlString $ evStartDate event, T.unpack $ evTitle event]
             where (year, month, _) = toGregorian' $ evStartDate event
 
 eventForm :: Maybe Event -> Html -> MForm Handler (FormResult Event, Widget)
 eventForm mevent = renderDivs $ makeEvent
     <$> areq textField "Titel"        (                                fmap evTitle       mevent)
-    <*> areq textField "Startdatum"   (     (pack . toSqlString) <$>   fmap evStartDate   mevent)
-    <*> aopt textField "Enddatum"     (fmap (pack . toSqlString) <$>   fmap evEndDate     mevent)
+    <*> areq textField "Startdatum"   (     (T.pack . toSqlString) <$> fmap evStartDate   mevent)
+    <*> aopt textField "Enddatum"     (fmap (T.pack . toSqlString) <$> fmap evEndDate     mevent)
     <*> aopt textField "Beschreibung" (                                fmap evDescription mevent)
     <*> aopt textField "Ort"          (                                fmap evLocation    mevent)
   where makeEvent :: Text -> Text -> Maybe Text -> Maybe Text -> Maybe Text -> Event
         makeEvent title start end = Event title
-                                          (fromMaybe startOfTime $ fromSqlString $ unpack     start)
-                                          (fromMaybe Nothing     $ fromSqlString . unpack <$> end)
+                                          (fromMaybe startOfTime $ fromSqlString $ T.unpack     start)
+                                          (fromMaybe Nothing     $ fromSqlString . T.unpack <$> end)
 
 getEventR :: Text -> Handler Html
 getEventR name = do app               <- getYesod
-                    eitherEvent       <- liftIO $ readItem (calendarRepo app) (unpack name)
+                    eitherEvent       <- liftIO $ readItem (calendarRepo app) (T.unpack name)
                     let mevent        =  either (\e -> trace (show e) Nothing)
                                                 Just
                                                 eitherEvent
@@ -726,7 +726,7 @@ postEventR :: Text -> Handler Html
 postEventR name = do
     ((result, widget), enctype) <- runFormPost $ eventForm Nothing
     case result of FormSuccess event -> do app               <- getYesod
-                                           let strName       =  unpack name
+                                           let strName       =  T.unpack name
                                            -- this should actually be removeItem (old path) >> writeItem (new path)
                                            result <- liftIO $ writeItem (calendarRepo app) strName event
                                            case result of
@@ -783,18 +783,18 @@ instance Persistent Member where
                            (opt_property "phone")
                            (opt_property "mobile")
                            (opt_property "email")
-      where req_property = pack . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
-            opt_property pname = (pack . show) <$> liftM prop_value (getProperty node pname)
+      where req_property = T.pack . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
+            opt_property pname = (T.pack . show) <$> liftM prop_value (getProperty node pname)
     toNode repo memberName member = Node memberName
                                          (urlFromString memberName)
-                                         [ Property "firstname" $ StringValue $ unpack $                firstname member
-                                         , Property "name"      $ StringValue $ unpack $                name      member
-                                         , Property "address"   $ StringValue $ unpack $ fromMaybe "" $ address   member
-                                         , Property "locality"  $ StringValue $ unpack $ fromMaybe "" $ locality  member
-                                         , Property "status"    $ StringValue $ unpack $                status    member
-                                         , Property "phone"     $ StringValue $ unpack $ fromMaybe "" $ phone     member
-                                         , Property "mobile"    $ StringValue $ unpack $ fromMaybe "" $ mobile    member
-                                         , Property "email"     $ StringValue $ unpack $ fromMaybe "" $ email     member
+                                         [ Property "firstname" $ StringValue $ T.unpack $                firstname member
+                                         , Property "name"      $ StringValue $ T.unpack $                name      member
+                                         , Property "address"   $ StringValue $ T.unpack $ fromMaybe "" $ address   member
+                                         , Property "locality"  $ StringValue $ T.unpack $ fromMaybe "" $ locality  member
+                                         , Property "status"    $ StringValue $ T.unpack $                status    member
+                                         , Property "phone"     $ StringValue $ T.unpack $ fromMaybe "" $ phone     member
+                                         , Property "mobile"    $ StringValue $ T.unpack $ fromMaybe "" $ mobile    member
+                                         , Property "email"     $ StringValue $ T.unpack $ fromMaybe "" $ email     member
                                          ]
                                          repo
 
@@ -811,7 +811,7 @@ memberForm mmember = renderDivs $ Member
 
 getMemberR :: Text -> Handler Html
 getMemberR name = do app               <- getYesod
-                     eitherMember      <- liftIO $ readItem (memberRepo app) (unpack name)
+                     eitherMember      <- liftIO $ readItem (memberRepo app) (T.unpack name)
                      let mmember       =  either (\e -> trace (show e) Nothing)
                                                  Just
                                                  eitherMember
@@ -826,7 +826,7 @@ postMemberR :: Text -> Handler Html
 postMemberR name = do
     ((result, widget), enctype) <- runFormPost $ memberForm Nothing
     case result of FormSuccess member -> do app               <- getYesod
-                                            result <- liftIO $ writeItem (memberRepo app) (unpack name) member
+                                            result <- liftIO $ writeItem (memberRepo app) (T.unpack name) member
                                             case result of
                                                 Left e -> return $ trace (show e) ()
                                                 _      -> return ()
@@ -872,10 +872,10 @@ getMemberListR = selectRep $ do
               app           <- getYesod
               eitherMembers <- liftIO $ runEitherT $ getNode (memberRepo app) (urlFromString "/") >>= getMemberList
               case eitherMembers of
-                  Left  e       -> do $logError $ pack $ show e
+                  Left  e       -> do $logError $ T.pack $ show e
                                       as ([] :: [Member])
                   Right members -> as members
-        memberId member = T.concat [name member, pack " ", firstname member]
+        memberId member = T.concat [name member, T.pack " ", firstname member]
         getMemberList :: Node -> RepositoryContext [Member]
         getMemberList node = liftM (sort . map fromNode) (getChildNodes node)
 
@@ -890,7 +890,7 @@ getGalleriesR = selectRep $
         app             <- getYesod
         eitherGalleries <- liftIO $ runEitherT $ list_galleries $ galleryRepo app
         case eitherGalleries of
-            Left  e         -> do $logError $ pack $ show e
+            Left  e         -> do $logError $ T.pack $ show e
                                   fail "Internal error while trying to list galleries."
             Right galleries ->
                 cbgLayout ["galleries"] [whamlet|
@@ -900,26 +900,28 @@ getGalleriesR = selectRep $
                         $forall gallery <- galleries
                             <tr>
                                 <td>
-                                    <a href=@{GalleryR (pack $ gallery_name gallery)}>#{gallery_name gallery}
+                                    <a href=@{GalleryR (T.pack $ gallery_name gallery)}>#{gallery_name gallery}
                 |]
 
 getGalleryR :: Text -> Handler TypedContent
 getGalleryR gname = selectRep $
     provideRep $ do
         app           <- getYesod
-        eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (unpack gname)
+        eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (T.unpack gname)
         case eitherGallery of
-            Left  e         -> do $logError $ pack $ show e
+            Left  e         -> do $logError $ T.pack $ show e
                                   fail "Internal error while trying to list galleries."
             Right gallery ->
                 cbgLayout ["gallery", gname] $
                     [whamlet|
                         <h1>#{gname}
                         <div .row>
-                            $forall iname <- map pack $ gallery_images gallery
-                                <a href=@{GalleryImageR gname iname}>
-                                    <img src=@{ImageR gname iname} alt=#{iname} width=171>
-                            <input #fileinput type=file multiple=multiple accept="image/*">
+                            $forall iname <- map T.pack $ gallery_images gallery
+                                <div .galleryimg>
+                                    <a href=@{GalleryImageR gname iname}>
+                                        <img src=@{ImageR gname iname} alt=#{iname} width=171>
+                            <div .galleryimg>
+                                <input #fileinput type=file multiple=multiple accept="image/*">
                         <script>
                             function uploadFile(file) {
                                 var xhr = new XMLHttpRequest();
@@ -950,9 +952,9 @@ getGalleryImagesR :: Text -> Handler TypedContent
 getGalleryImagesR gname = selectRep $
     provideRep $ do
         app           <- getYesod
-        eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (unpack gname)
+        eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (T.unpack gname)
         case eitherGallery of
-            Left  e         -> do $logError $ pack $ show e
+            Left  e         -> do $logError $ T.pack $ show e
                                   fail "Internal error while trying to list galleries."
             Right gallery ->
                 cbgLayout ["gallery", gname] [whamlet|
@@ -960,7 +962,7 @@ getGalleryImagesR gname = selectRep $
                     <table>
                         <tr>
                             <th>image
-                        $forall iname <- map pack $ gallery_images gallery
+                        $forall iname <- map T.pack $ gallery_images gallery
                             <tr>
                                 <td>
                                     <a href=@{GalleryImageR gname iname}>#{iname}
@@ -971,14 +973,14 @@ getGalleryImageR :: Text -> Text -> Handler TypedContent
 getGalleryImageR gname iname = selectRep $
     provideRep $ do
         app           <- getYesod
-        eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (unpack gname)
+        eitherGallery <- liftIO $ runEitherT $ gallery_read (galleryRepo app) (T.unpack gname)
         case eitherGallery of
             Left  e       -> do
-                $logError $ pack $ show e
+                $logError $ T.pack $ show e
                 fail "Internal error while trying to list galleries."
             Right gallery -> do
                 let images     = gallery_images gallery
-                    Just imgno = elemIndex (unpack iname) images
+                    Just imgno = elemIndex (T.unpack iname) images
                     imgprev    = if imgno < 1
                                  then []
                                  else take 1 $ drop (imgno - 1) images
@@ -990,12 +992,12 @@ getGalleryImageR gname iname = selectRep $
                             <th>
                                 $case imgprev
                                     $of [prev]
-                                        <a href=@{GalleryImageR gname (pack prev)}>&lt;- Vorheriges
+                                        <a href=@{GalleryImageR gname (T.pack prev)}>&lt;- Vorheriges
                                     $of _
                                 |
                                 $case imgnext
                                     $of [next]
-                                        <a href=@{GalleryImageR gname (pack next)}>Nächstes -&gt;
+                                        <a href=@{GalleryImageR gname (T.pack next)}>Nächstes -&gt;
                                     $of _
                         <tr>
                             <td>
@@ -1014,12 +1016,12 @@ getImageR :: Text -> Text -> Handler ()
 getImageR gname iname = do
     app         <- getYesod
     eitherImage <- liftIO $ runEitherT $ do
-        image <- image_read (galleryRepo app) (unpack gname) (unpack iname)
+        image <- image_read (galleryRepo app) (T.unpack gname) (T.unpack iname)
         blob  <- image_blob image
         return (image, blob)
     case eitherImage of
         Left e -> do
-            $logError $ pack $ show e
+            $logError $ T.pack $ show e
             fail "Internal error while trying to load image."
         Right (image, blob) ->
             sendWaiResponse $ responseLBS status200 [("Content-Type",  U8.fromString $ image_type image)] blob
@@ -1037,10 +1039,10 @@ postUploadImageR gname = do
                   let type' = fileContentType file
                   bytes <- runConduit $ fileSource file $$ CB.sinkLbs
                   eitherResult <- liftIO $
-                      runEitherT $ image_write (galleryRepo app) (unpack gname) (unpack iname) (unpack type') (unpack userName) bytes
+                      runEitherT $ image_write (galleryRepo app) (T.unpack gname) (T.unpack iname) (T.unpack type') (T.unpack userName) bytes
                   case eitherResult of
                       Left e -> do
-                          $logError $ pack $ show e
+                          $logError $ T.pack $ show e
                           fail "Internal error while trying to save image."
                       Right _ -> return ()
             mapM_ upload files
