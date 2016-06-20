@@ -21,11 +21,9 @@ import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
 import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
 
 -- Yesod
-import           Network.HTTP.Conduit                              (Manager, conduitManagerSettings,
-                                                                    newManager)
+import           Network.HTTP.Conduit                              (Manager)
 import           Network.HTTP.Types                                (status200)
-import           Network.Wai                                       (pathInfo, requestHeaders,
-                                                                    responseLBS)
+import           Network.Wai                                       (responseLBS)
 import           Text.Hamlet
 import           Yesod                                             hiding
                                                                     (deleteBy,
@@ -36,18 +34,12 @@ import           Yesod.Auth.GoogleEmail2
 import           Yesod.Static
 
 -- other imports
-import           Control.Applicative                               ((<$>),
-                                                                    (<*>))
-import           Control.Concurrent                                (MVar,
-                                                                    newMVar)
+import           Control.Concurrent                                (MVar)
 import           Control.Exception                                 (IOException)
 import           Control.Exception.Base                            (throwIO)
-import           Control.Monad                                     (filterM,
-                                                                    liftM)
+import           Control.Monad                                     (liftM)
 import           Control.Monad.Trans.Either                        (left,
                                                                     runEitherT)
-import           Data.Aeson                                        (encode,
-                                                                    object)
 import           Data.ByteString                                   (ByteString)
 import qualified Data.ByteString.UTF8                              as U8
 import           Data.Conduit
@@ -59,22 +51,14 @@ import           Data.List                                         (deleteBy,
                                                                     intercalate,
                                                                     sort)
 import           Data.Maybe                                        (fromMaybe)
-import           Data.Ord                                          (Ord,
-                                                                    compare)
 import           Data.Text                                         (Text)
 import qualified Data.Text                                         as T
 import qualified Data.Text.Lazy                                    as TL
 import           Database.Persist.Sqlite                           (ConnectionPool,
                                                                     SqlBackend,
                                                                     runSqlPool)
-import           Database.Persist.TH                               (mkMigrate,
-                                                                    mkPersist,
-                                                                    persistUpperCase,
-                                                                    share,
-                                                                    sqlSettings)
 import           Debug.Trace
 import           Network.Mail.Mime
-import           System.FilePath                                   (joinPath)
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistUpperCase|
 User
@@ -250,9 +234,8 @@ instance PersistUserCredentials User where
 
 cbgLayout :: [Text] -> Widget -> Handler Html
 cbgLayout path widget = do pageContent  <- widgetToPageContent widget
-                           maybeAuthId  <- maybeAuthId
-                           req          <- getRequest
-                           navi         <- widgetToPageContent $ navigationWidget maybeAuthId path
+                           maybeAuthId' <- maybeAuthId
+                           navi         <- widgetToPageContent $ navigationWidget maybeAuthId' path
                            trail        <- widgetToPageContent $ auditTrail       path
                            withUrlRenderer $(hamletFile "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/Impl/layout.hamlet")
 
@@ -411,8 +394,8 @@ getEditContentR (ContentPath pieces) = do
     eitherNode <- liftIO $ runEitherT $ do
         let url = map T.unpack pieces
         getNode (contentRepo app) url
-    (prop, title) <- case eitherNode of
-        Left ioe -> notFound
+    (prop, _) <- case eitherNode of
+        Left _ -> notFound
         Right node | null (node_path node) -> redirect ("/content/welcome" :: String)
         Right node -> do
             let prop  = case getProperty node "text.html" of
@@ -434,7 +417,7 @@ postEditContentR (ContentPath pieces) = do
         let url = map T.unpack pieces
         getNode (contentRepo app) url
     case eitherNode of
-        Left ioe -> notFound
+        Left _ -> notFound
         Right node | null (node_path node) -> notFound
         Right node -> do
           let props   = node_props node
@@ -454,7 +437,7 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
         let url = map T.unpack pieces
         getNode (contentRepo app) url
     case eitherNode of
-        Left ioe -> notFound
+        Left _ -> notFound
         Right node | null (node_path node) -> redirect ("/content/welcome" :: String)
         Right node -> do
             let prop = case getProperty node "text.html" of
@@ -467,10 +450,10 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
 ------------------------------------------------------------------------------------------
 
 navigationWidget :: Maybe authId -> [Text] -> Widget
-navigationWidget maybeAuthId path = do
+navigationWidget maybeAuthId' path = do
     let path' =  map T.unpack path
-    let casePart = case maybeAuthId of
-                       Just userid ->
+    let casePart = case maybeAuthId' of
+                       Just _ ->
                            case path' of
                                ("content" : _) ->
                                    [whamlet|
@@ -565,7 +548,7 @@ contentNavigation path = do app         <- getYesod
                                 welcome      <- getNode (node_repo node) ["welcome"]
                                 return (node, parent, siblings, children, welcome)
                             case eitherNodes of
-                                Left ioe ->
+                                Left _ ->
                                     return ()
                                 Right (node, parent, siblings, children, welcome) -> do
                                     let subnavi = [whamlet|
@@ -606,7 +589,7 @@ auditTrail path = do app         <- getYesod
                          node        <- getNode (contentRepo app) repoPath
                          getTrail node
                      case eitherNodes of
-                         Left ioe    ->
+                         Left _ ->
                              return ()
                          Right nodes -> mapM_ encodeTrail nodes
     where encodeTrail n = [whamlet|<li .menu-123 .collapsed>
@@ -666,6 +649,7 @@ getParentNodes node = foldrM appendToNodes [node] $ node_path node
           appendToNodes :: PathComponent -> [Node] -> RepositoryContext [Node]
           appendToNodes _ (n : ns) = do p <- getParentNode n
                                         return (p : n : ns)
+          appendToNodes _ _ = undefined
 
 ------------------------------------------------------------------------------------------
 --- Member Calendar
@@ -752,8 +736,8 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
          let nodes' = filter ((== 4) . length . node_path) nodes
          return $ map fromNode nodes'
 
-        eventId event = T.pack $ intercalate "/" [show year, show month, toSqlString $ evStartDate event, T.unpack $ evTitle event]
-            where (year, month, _) = toGregorian' $ evStartDate event
+        eventId event = T.pack $ intercalate "/" [show year', show month', toSqlString $ evStartDate event, T.unpack $ evTitle event]
+            where (year', month', _) = toGregorian' $ evStartDate event
 
 eventForm :: Maybe Event -> Html -> MForm Handler (FormResult Event, Widget)
 eventForm mevent = renderDivs $ makeEvent
@@ -786,8 +770,8 @@ postEventR name = do
     case result of FormSuccess event -> do app               <- getYesod
                                            let strName       =  T.unpack name
                                            -- this should actually be removeItem (old path) >> writeItem (new path)
-                                           result <- liftIO $ writeItem (calendarRepo app) strName event
-                                           case result of
+                                           result' <- liftIO $ writeItem (calendarRepo app) strName event
+                                           case result' of
                                                Left e -> return $ trace (show e) ()
                                                _      -> return ()
                                            let (year, month, _) = toGregorian' $ evStartDate event
@@ -884,8 +868,8 @@ postMemberR :: Text -> Handler Html
 postMemberR name = do
     ((result, widget), enctype) <- runFormPost $ memberForm Nothing
     case result of FormSuccess member -> do app               <- getYesod
-                                            result <- liftIO $ writeItem (memberRepo app) (T.unpack name) member
-                                            case result of
+                                            result' <- liftIO $ writeItem (memberRepo app) (T.unpack name) member
+                                            case result' of
                                                 Left e -> return $ trace (show e) ()
                                                 _      -> return ()
                                             redirect MemberListR
@@ -1001,10 +985,10 @@ getGalleryR gname = selectRep $
                     |]
 
 postGalleryR :: Text -> Handler Html
-postGalleryR name = undefined
+postGalleryR _ = undefined
 
 deleteGalleryR :: Text -> Handler Html
-deleteGalleryR name = undefined
+deleteGalleryR _ = undefined
 
 getGalleryImagesR :: Text -> Handler TypedContent
 getGalleryImagesR gname = selectRep $
@@ -1065,10 +1049,10 @@ getGalleryImageR gname iname = selectRep $
 
 
 postGalleryImageR :: Text -> Text -> Handler Html
-postGalleryImageR gname name = undefined
+postGalleryImageR _ _ = undefined
 
 deleteGalleryImageR :: Text -> Text -> Handler Html
-deleteGalleryImageR gname name = undefined
+deleteGalleryImageR _ _ = undefined
 
 getImageR :: Text -> Text -> Handler ()
 getImageR gname iname = do

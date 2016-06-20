@@ -7,9 +7,7 @@ import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite
 
 -- Yesod
 import           Control.Concurrent                                 (newMVar)
-import           Network.HTTP.Conduit                               (Manager,
-                                                                     newManager,
-                                                                     tlsManagerSettings)
+import           Network.HTTP.Conduit                               (newManager, tlsManagerSettings)
 import           Network.HTTP.Types                                 (status302)
 import           Network.Wai                                        (isSecure,
                                                                      rawPathInfo,
@@ -20,8 +18,7 @@ import           Network.Wai.Handler.WarpTLS                        (OnInsecure 
                                                                      onInsecure,
                                                                      runTLS,
                                                                      tlsSettings)
-import           Yesod                                              (toWaiApp,
-                                                                     warp)
+import           Yesod                                              (toWaiApp)
 import           Yesod.Static                                       (static)
 
 -- other
@@ -34,11 +31,12 @@ import           Database.Persist.Sqlite                            (runMigratio
                                                                      runSqlPool,
                                                                      withSqlitePool)
 
+main :: IO ()
 main = do sem                          <- newMVar True
           staticSettings               <- static "static"
           manager                      <- newManager tlsManagerSettings
-          clientId                     <- readFile "google.clientId"
-          clientSecret                 <- readFile "google.clientSecret"
+          clientId'                    <- readFile "google.clientId"
+          clientSecret'                <- readFile "google.clientSecret"
           let warpSettings              = setPort 8080 defaultSettings
               warpTlsSettings           = (tlsSettings "server.crt" "server.key") { onInsecure = AllowInsecure }
               redirectHttp app req resp = if isSecure req
@@ -57,7 +55,7 @@ main = do sem                          <- newMVar True
                     (Repository "data/calendar")
                     (Repository "data/galleries")
                     (Repository "data/assets")
-                    (pack clientId)
-                    (pack clientSecret)
+                    (pack clientId')
+                    (pack clientSecret')
                     pool
               runTLS warpTlsSettings warpSettings (redirectHttp app)

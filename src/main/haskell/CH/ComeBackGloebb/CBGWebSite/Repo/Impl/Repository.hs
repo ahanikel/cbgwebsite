@@ -47,7 +47,6 @@ import           System.Exit                                  (ExitCode (..))
 import           System.FilePath                              (normalise,
                                                                splitDirectories,
                                                                (</>))
-import           System.IO.Error                              (userError)
 import           System.Process                               (rawSystem)
 
 -- exported
@@ -123,17 +122,17 @@ data Node = Node { node_name  :: String
 type RepositoryContext a = EitherT IOError IO a
 
 readProperties :: FilePath -> IO [Property]
-readProperties path = readFiles path      >>=
+readProperties path = readFiles           >>=
                       filterM filterFiles >>=
                       mapM readProperty
     where
           -- return a list of pairs (fileName, completePath), e.g. ("text.md", "content/welcome/text.md")
-          readFiles :: FilePath -> IO [(FilePath, FilePath)]
-          readFiles path            = getDirectoryContents path >>= return . map (\n -> (pathCompFromFilePath n, path </> n))
-          filterFiles (name, path)  = do exists <- doesFileExist path
-                                         let isProp = isSuffixOf ".p" path
-                                         return $ exists && isProp
-          readProperty (name, path) = readFile path >>= return . Property name . StringValue
+          readFiles :: IO [(FilePath, FilePath)]
+          readFiles                  = getDirectoryContents path >>= return . map (\n -> (pathCompFromFilePath n, path </> n))
+          filterFiles (_, path')     = do exists <- doesFileExist path'
+                                          let isProp = isSuffixOf ".p" path'
+                                          return $ exists && isProp
+          readProperty (name, path') = readFile path' >>= return . Property name . StringValue
 
 writeProperties :: [Property] -> FilePath -> IO ()
 writeProperties props path = mapM_ writeProperty props

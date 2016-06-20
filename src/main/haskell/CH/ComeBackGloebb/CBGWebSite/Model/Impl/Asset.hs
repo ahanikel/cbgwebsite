@@ -5,7 +5,6 @@ module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Asset ( Asset(assetName, assetTyp
 
 -- CBG
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
-import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
 
 -- other
 import           Control.Monad                                     (liftM)
@@ -13,7 +12,6 @@ import           Data.DateTime                                     (DateTime, fr
                                                                     startOfTime,
                                                                     toSqlString)
 import           Data.Maybe                                        (fromMaybe)
-import           Data.Text                                         (Text)
 import           System.FilePath                                   ((</>))
 
 -- exported

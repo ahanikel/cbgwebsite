@@ -18,7 +18,7 @@ $doctype 5
                                 <img #logo src=@{StaticR garland_logo_png} alt="">
                     <ul .links .primary-links>
                         ^{pageBody trail}
-                        $maybe userid <- maybeAuthId
+                        $maybe userid <- maybeAuthId'
                             <li .menu-170 .last>
                                 <a href=@{AuthR LogoutR} title="Logout">Logout #{userid}
                 <div #sidebar-left .sidebar>

@@ -24,10 +24,8 @@ import           System.Directory                             (createDirectoryIf
                                                                doesDirectoryExist,
                                                                doesFileExist,
                                                                getDirectoryContents,
-                                                               removeDirectoryRecursive,
                                                                removeFile)
 import           System.FilePath                              ((</>))
-import           System.IO                                    (appendFile)
 
 
 ------------------------------------------------------------------------------------
@@ -59,16 +57,18 @@ propPathPath path = '/' : a : b : '/' : c : d : '/' : e : f : '/' : hash
 -- Instances
 ------------------------------------------------------------------------------------
 
+data FakeRepository = FakeRepository
+
 instance Repository FakeRepository TransactionContext where
-    r_getTransaction tc             = left $ userError "r_getTransaction not implemented"
-    r_logBegin       repo trans     = left $ userError "r_logBegin not implemented"
-    r_logEnd         repo trans     = left $ userError "r_logEnd not implemented"
-    r_getNode        repo path      = left $ userError "r_getNode not implemented"
-    r_addNode        repo node      = tell [AddNode        node]
-    r_removeNode     repo node      = tell [RemoveNode     node]
-    r_addProperty    repo node prop = tell [AddProperty    node prop]
-    r_removeProperty repo node prop = tell [RemoveProperty node prop]
-    r_modifyProperty repo node prop = tell [ModifyProperty node prop]
+    r_getTransaction _              = left $ userError "r_getTransaction not implemented"
+    r_logBegin       _    _         = left $ userError "r_logBegin not implemented"
+    r_logEnd         _    _         = left $ userError "r_logEnd not implemented"
+    r_getNode        _    _         = left $ userError "r_getNode not implemented"
+    r_addNode        _    node      = tell [AddNode        node]
+    r_removeNode     _    node      = tell [RemoveNode     node]
+    r_addProperty    _    node prop = tell [AddProperty    node prop]
+    r_removeProperty _    node prop = tell [RemoveProperty node prop]
+    r_modifyProperty _    node prop = tell [ModifyProperty node prop]
 
 instance Repository LocalRepository IO where
     r_getTransaction tc             = check $ do let ops = snd $ runWriter $ runTC tc
@@ -88,7 +88,7 @@ instance Repository LocalRepository IO where
                                                    [(entry,_)] -> do
                                                      let (Just uuid) = fromString entry
                                                      return $ Node uuid path
-                                                   otherwise -> fail "Node not found"
+                                                   _ -> fail "Node not found"
     r_addNode        repo node      = check $ do let uuiddir = localrep_root repo ++ "/uuid" ++ uuidPath node
                                                  let pathdir = localrep_root repo ++ "/path" ++ (propPathPath $ node_path node)
                                                  existsu <- doesDirectoryExist uuiddir
@@ -100,7 +100,7 @@ instance Repository LocalRepository IO where
                                                  writeFile (uuiddir </> "path") (node_path node)
                                                  createDirectoryIfMissing True pathdir
                                                  writeFile (pathdir </> (show $ node_uuid node)) (node_path node)
-    r_removeNode     repo node      = undefined
+    r_removeNode     _    _         = undefined
 --     r_removeNode     repo node      = check $ do n <- r_getNode repo (node_path node)
 --                                                  children <- findChildren n
 --                                                  mapM_ (r_removeNode repo) children
@@ -131,18 +131,16 @@ instance Repository LocalRepository IO where
                                                  else return ()
     r_modifyProperty                = r_addProperty -- for now...
 
-data FakeRepository = FakeRepository
-
 instance Repository FakeRepository (Writer [String]) where
     r_getTransaction                = return . Transaction nil . snd . runWriter . runTC
-    r_logBegin repo trans           = tell ["r_logBegin "       ++ show trans]
-    r_logEnd repo trans             = tell ["r_logEnd "         ++ show trans]
-    r_getNode        repo path      = tell ["r_getNode "        ++ show path] >> (return $ Node nil path)
-    r_addNode        repo node      = tell ["r_addNode "        ++ show node]
-    r_removeNode     repo node      = tell ["r_removeNode "     ++ show node]
-    r_addProperty    repo node prop = tell ["r_addProperty "    ++ show node ++ " " ++ show prop]
-    r_removeProperty repo node prop = tell ["r_removeProperty " ++ show node ++ " " ++ show prop]
-    r_modifyProperty repo node prop = tell ["r_modifyProperty " ++ show node ++ " " ++ show prop]
+    r_logBegin       _    trans     = tell ["r_logBegin "       ++ show trans]
+    r_logEnd         _    trans     = tell ["r_logEnd "         ++ show trans]
+    r_getNode        _    path      = tell ["r_getNode "        ++ show path] >> (return $ Node nil path)
+    r_addNode        _    node      = tell ["r_addNode "        ++ show node]
+    r_removeNode     _    node      = tell ["r_removeNode "     ++ show node]
+    r_addProperty    _    node prop = tell ["r_addProperty "    ++ show node ++ " " ++ show prop]
+    r_removeProperty _    node prop = tell ["r_removeProperty " ++ show node ++ " " ++ show prop]
+    r_modifyProperty _    node prop = tell ["r_modifyProperty " ++ show node ++ " " ++ show prop]
 
 runTransaction :: Repository r m => r -> TransactionContext a -> m (Either IOError Transaction)
 runTransaction repo tc = runEitherT $ do trans <- r_getTransaction tc
@@ -169,7 +167,9 @@ doSomething = do _ <- runEitherT $ do --r_removeNode  FakeRepository node
 -- rep_transactionsSince (LocalRepository root parent) uuid = [RootTransaction]
 -- rep_transactionsSince RemoteRepository              uuid = [RootTransaction]
 
+test_runTransaction :: IO ()
 test_runTransaction = do res <- runTransaction (LocalRepository "/tmp/testrepo") doSomething
                          putStrLn $ show res
 
+test_doSomething :: IO ()
 test_doSomething = putStrLn $ show $ runWriter $ runTC doSomething

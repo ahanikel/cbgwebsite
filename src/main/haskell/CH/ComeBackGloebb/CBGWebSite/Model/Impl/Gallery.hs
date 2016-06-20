@@ -16,7 +16,6 @@ import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
 
 -- other
-import           Control.Monad                                     (filterM)
 import           Data.ByteString.Lazy                              (ByteString)
 import           Data.DateTime                                     (DateTime, fromSqlString,
                                                                     getCurrentTime,
@@ -24,8 +23,6 @@ import           Data.DateTime                                     (DateTime, fr
                                                                     toSqlString)
 import           Data.List                                         (sort)
 import           Data.Maybe                                        (fromMaybe)
-import           Data.Ord                                          (Ord,
-                                                                    compare)
 import           System.FilePath                                   ((</>))
 
 data Gallery = Gallery { gallery_repo     :: Repository
@@ -67,7 +64,7 @@ instance Persistent Image where
       name         = image_name    image
       gallery      = image_gallery image
       url          = urlFromString $ gallery </> name
-      type'         = Property "type"         $ StringValue $ image_type image
+      type'        = Property "type"         $ StringValue $ image_type image
       uploadedBy   = Property "uploadedBy"   $ StringValue $ image_uploadedBy image
       uploadedDate = Property "uploadedDate" $ StringValue $ toSqlString $ image_uploadedDate image
       repo         = image_repo    image
@@ -81,8 +78,8 @@ instance Ord Gallery where
 --exported
 list_galleries :: Repository -> RepositoryContext [Gallery]
 list_galleries repo = do
-  root      <- getNode repo $ urlFromString "/"
-  gnames    <- getChildNodeNames root
+  root'     <- getNode repo $ urlFromString "/"
+  gnames    <- getChildNodeNames root'
   mapM (gallery_read repo) gnames >>= return . sort
 
 --exported

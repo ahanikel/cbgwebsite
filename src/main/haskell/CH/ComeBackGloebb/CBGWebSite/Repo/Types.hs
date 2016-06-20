@@ -2,11 +2,8 @@
 
 module CH.ComeBackGloebb.CBGWebSite.Repo.Types where
 
-import           Control.Applicative  (Applicative)
-import           Control.Monad        (Monad)
 import           Control.Monad.Writer (MonadWriter, Writer)
 import           Data.DateTime        (DateTime)
-import           Data.Functor         (Functor)
 import           Data.UUID            (UUID)
 
 newtype PathComponent = PathComponent String
