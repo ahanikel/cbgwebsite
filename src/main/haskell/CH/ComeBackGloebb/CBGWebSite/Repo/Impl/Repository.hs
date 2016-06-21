@@ -151,11 +151,11 @@ getProperty node pname = case props of
   where props = filter (\p -> prop_name p == pname) $ node_props node
 
 -- exported
-getPropertyPath :: Node -> Property -> FilePath
-getPropertyPath node prop = root repo </> path </> fileName
+getPropertyPath :: Node -> String -> FilePath
+getPropertyPath node pname = root repo </> path </> fileName
   where repo = node_repo node
         path = urlToFilePath $ node_path node
-        fileName = prop_name prop ++ ".p"
+        fileName = pname ++ ".p"
 
 -- exported
 writeBlobProperty :: Node -> String -> BL.ByteString -> RepositoryContext ()

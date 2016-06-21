@@ -22,8 +22,6 @@ import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
 
 -- Yesod
 import           Network.HTTP.Conduit                              (Manager)
-import           Network.HTTP.Types                                (status200)
-import           Network.Wai                                       (responseLBS)
 import           Text.Hamlet
 import           Yesod                                             hiding
                                                                     (deleteBy,
@@ -40,7 +38,7 @@ import           Control.Exception.Base                            (throwIO)
 import           Control.Monad                                     (liftM)
 import           Control.Monad.Trans.Either                        (left,
                                                                     runEitherT)
-import           Data.ByteString                                   (ByteString)
+import qualified Data.ByteString                                   as B
 import qualified Data.ByteString.UTF8                              as U8
 import           Data.Conduit
 import qualified Data.Conduit.Binary                               as CB
@@ -64,7 +62,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistUpperCase|
 User
     username Text
     UniqueUsername username
-    password ByteString
+    password B.ByteString
     emailAddress Text
     verified Bool
     verifyKey Text
@@ -104,7 +102,9 @@ mkYesod "CBGWebSite" [parseRoutes|
     /gallery/#Text                   GalleryR              GET POST DELETE
     /gallery/#Text/images            GalleryImagesR        GET
     /gallery/#Text/image/#Text       GalleryImageR         GET POST DELETE
-    /image/#Text/#Text               ImageR                GET
+    /image/orig/#Text/#Text          ImageR                GET
+    /image/small/#Text/#Text         ImageSmallR           GET
+    /image/thumb/#Text/#Text         ImageThumbR           GET
     /upload/image/#Text              UploadImageR          POST
     /asset/+ContentPath              AssetR                GET
 |]
@@ -165,6 +165,10 @@ instance Yesod CBGWebSite where
     isAuthorized (GalleryImageR _ _)    False = isAuthorized MembersR False
 
     isAuthorized (ImageR _ _)           False = isAuthorized MembersR False
+
+    isAuthorized (ImageSmallR _ _)      False = isAuthorized MembersR False
+
+    isAuthorized (ImageThumbR _ _)      False = isAuthorized MembersR False
 
     isAuthorized (UploadImageR _)       True  = isAuthorized MembersR False
 
@@ -961,7 +965,7 @@ getGalleryR gname = selectRep $
                             $forall iname <- map T.pack $ gallery_images gallery
                                 <div .galleryimg>
                                     <a href=@{GalleryImageR gname iname}>
-                                        <img src=@{ImageR gname iname} alt=#{iname} width=171>
+                                        <img src=@{ImageThumbR gname iname} alt=#{iname} width=171>
                             <div .galleryimg>
                                 <input #fileinput type=file multiple=multiple accept="image/*">
                         <script>
@@ -1044,7 +1048,7 @@ getGalleryImageR gname iname = selectRep $
                         <tr>
                             <td>
                                 <a href=@{ImageR gname iname}>
-                                    <img src=@{ImageR gname iname}>
+                                    <img src=@{ImageSmallR gname iname}>
                 |]
 
 
@@ -1057,16 +1061,32 @@ deleteGalleryImageR _ _ = undefined
 getImageR :: Text -> Text -> Handler ()
 getImageR gname iname = do
     app         <- getYesod
-    eitherImage <- liftIO $ runEitherT $ do
-        image <- image_read (galleryRepo app) (T.unpack gname) (T.unpack iname)
-        blob  <- image_blob image
-        return (image, blob)
+    eitherImage <- liftIO $ runEitherT $ image_read (galleryRepo app) (T.unpack gname) (T.unpack iname)
     case eitherImage of
         Left e -> do
             $logError $ T.pack $ show e
-            fail "Internal error while trying to load image."
-        Right (image, blob) ->
-            sendWaiResponse $ responseLBS status200 [("Content-Type",  U8.fromString $ image_type image)] blob
+            notFound
+        Right image -> sendFile (U8.fromString $ image_type image) (image_blob image)
+
+getImageSmallR :: Text -> Text -> Handler ()
+getImageSmallR gname iname = do
+    app         <- getYesod
+    eitherImage <- liftIO $ runEitherT $ image_read (galleryRepo app) (T.unpack gname) (T.unpack iname)
+    case eitherImage of
+        Left e -> do
+            $logError $ T.pack $ show e
+            notFound
+        Right image -> sendFile (U8.fromString $ image_type image) (image_small image)
+
+getImageThumbR :: Text -> Text -> Handler ()
+getImageThumbR gname iname = do
+    app         <- getYesod
+    eitherImage <- liftIO $ runEitherT $ image_read (galleryRepo app) (T.unpack gname) (T.unpack iname)
+    case eitherImage of
+        Left e -> do
+            $logError $ T.pack $ show e
+            notFound
+        Right image -> sendFile (U8.fromString $ image_type image) (image_thumb image)
 
 postUploadImageR :: Text -> Handler Html
 postUploadImageR gname = do

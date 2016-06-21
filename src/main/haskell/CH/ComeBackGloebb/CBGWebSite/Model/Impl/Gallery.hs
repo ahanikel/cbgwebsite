@@ -8,6 +8,8 @@ module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery ( Gallery(gallery_name, g
                                                        , gallery_remove_image
                                                        , image_read
                                                        , image_blob
+                                                       , image_small
+                                                       , image_thumb
                                                        , image_write
                                                        ) where
 
@@ -16,14 +18,18 @@ import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
 
 -- other
+import           Control.Monad                                     (unless,
+                                                                    when)
 import           Data.ByteString.Lazy                              (ByteString)
 import           Data.DateTime                                     (DateTime, fromSqlString,
                                                                     getCurrentTime,
                                                                     startOfTime,
                                                                     toSqlString)
 import           Data.List                                         (sort)
-import           Data.Maybe                                        (fromMaybe)
+import           Data.Maybe                                        (fromMaybe,
+                                                                    isJust)
 import           System.FilePath                                   ((</>))
+import           System.Process                                    (callProcess)
 
 data Gallery = Gallery { gallery_repo     :: Repository
                        , gallery_name     :: String
@@ -123,17 +129,48 @@ gallery_remove_image gallery name = do
   deleteNode inode
   gallery_read (gallery_repo gallery) (gallery_name gallery)
 
+image_blob_name :: String
+image_blob_name = "image.blob"
+
+image_small_name :: String
+image_small_name = "image.small"
+
+image_thumb_name :: String
+image_thumb_name = "image.thumb"
+
 --exported
 image_read :: Repository -> String -> String -> RepositoryContext Image
 image_read repo gname iname = do
-    inode    <- getNode repo (urlFromString $ gname </> iname)
-    return $ fromNode inode
+    inode         <- getNode repo (urlFromString $ gname </> iname)
+    let image      = fromNode inode
+    let blobPath   = image_blob  image
+    let smallPath  = image_small image
+    let thumbPath  = image_thumb image
+    let mBlobProp  = getProperty inode image_blob_name
+    let mSmallProp = getProperty inode image_small_name
+    let mThumbProp = getProperty inode image_thumb_name
+    let hasBlob    = isJust mBlobProp
+    let hasSmall   = isJust mSmallProp
+    let hasThumb   = isJust mThumbProp
+    unless hasThumb $ when hasBlob $ check $ callProcess "/usr/local/bin/convert" [blobPath, "-resize", "256", thumbPath]
+    unless hasSmall $ when hasBlob $ check $ callProcess "/usr/local/bin/convert" [blobPath, "-resize", "1010", smallPath]
+    return image
 
---exported, deprecated: use conduit or sendFile
-image_blob :: Image -> RepositoryContext ByteString
-image_blob image = do
-    let inode = toNode undefined undefined image
-    readBlobProperty inode "image"
+--exported: shamelessly changing type signature, we haven't released yet
+image_blob :: Image -> FilePath
+image_blob image =
+  let inode = toNode undefined undefined image
+  in getPropertyPath inode image_blob_name
+
+image_thumb :: Image -> FilePath
+image_thumb image =
+  let inode = toNode undefined undefined image
+  in getPropertyPath inode image_thumb_name
+
+image_small :: Image -> FilePath
+image_small image =
+  let inode = toNode undefined undefined image
+  in getPropertyPath inode image_small_name
 
 --exported
 image_write :: Repository -> String -> String -> String -> String -> ByteString -> RepositoryContext ()
