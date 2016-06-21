@@ -16,6 +16,7 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     , getChildNodesRecursively
     , Property (..)
     , getProperty
+    , getPropertyPath
     , readBlobProperty
     , writeBlobProperty
     , Value (..)
@@ -142,6 +143,21 @@ writeProperties props path = mapM_ writeProperty props
                                   writeFile filePath value
 
 -- exported
+getProperty :: Node -> String -> Maybe Property
+getProperty node pname = case props of
+  (prop:_) -> Just prop
+  _ -> Nothing
+
+  where props = filter (\p -> prop_name p == pname) $ node_props node
+
+-- exported
+getPropertyPath :: Node -> Property -> FilePath
+getPropertyPath node prop = root repo </> path </> fileName
+  where repo = node_repo node
+        path = urlToFilePath $ node_path node
+        fileName = prop_name prop ++ ".p"
+
+-- exported
 writeBlobProperty :: Node -> String -> BL.ByteString -> RepositoryContext ()
 writeBlobProperty node name bytes = do
   let path = node_path node
@@ -232,11 +248,6 @@ getChildNodesRecursively node = do
   nodes <- getChildNodes node
   nodes' <- mapM getChildNodesRecursively nodes
   return $ nodes ++ concat nodes'
-
---exported
-getProperty :: Node -> String -> Maybe Property
-getProperty node name = fmap (Property name) $ lookup name props
-    where props = map (\(Property n v) -> (n, v)) $ node_props node
 
 --exported
 isRootNode :: Node -> Bool
