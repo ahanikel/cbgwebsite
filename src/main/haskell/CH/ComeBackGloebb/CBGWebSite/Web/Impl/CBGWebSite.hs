@@ -15,7 +15,9 @@ module CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite where
 
 -- CBG
 import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Asset
+import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Event
 import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery
+import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Member
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
 import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
@@ -39,6 +41,7 @@ import           Control.Monad                                     (liftM)
 import           Control.Monad.Trans.Either                        (left,
                                                                     runEitherT)
 import qualified Data.ByteString                                   as B
+import qualified Data.ByteString.Lazy.Char8                        as BL8
 import qualified Data.ByteString.UTF8                              as U8
 import           Data.Conduit
 import qualified Data.Conduit.Binary                               as CB
@@ -398,21 +401,16 @@ getEditContentR (ContentPath pieces) = do
     eitherNode <- liftIO $ runEitherT $ do
         let url = map T.unpack pieces
         getNode (contentRepo app) url
-    (prop, _) <- case eitherNode of
+    case eitherNode of
         Left _ -> notFound
         Right node | null (node_path node) -> redirect ("/content/welcome" :: String)
         Right node -> do
-            let prop  = case getProperty node "text.html" of
-                             Just p  -> show $ prop_value p
-                             Nothing -> ""
-            let title = case getProperty node "title" of
-                             Just p  -> show $ prop_value p
-                             Nothing -> ""
-            return (prop, title)
-    let contentBody = toWidget $ toHtml prop
-    -- let propertiesWidget =
-    -- let permissionsWidget =
-    editLayout ("content" : pieces) contentBody
+          res <- liftIO $ runEitherT $ liftM show $ getProperty node "text.html"
+          prop <- either (fail . show) return res
+          let contentBody = toWidget $ toHtml prop
+          -- let propertiesWidget =
+          -- let permissionsWidget =
+          editLayout ("content" : pieces) contentBody
 
 postEditContentR :: ContentPath -> Handler Html
 postEditContentR (ContentPath pieces) = do
@@ -424,15 +422,10 @@ postEditContentR (ContentPath pieces) = do
         Left _ -> notFound
         Right node | null (node_path node) -> notFound
         Right node -> do
-          let props   = node_props node
-              props'  = deleteBy (\ (Property a _) (Property b _) -> a == b) (Property "text.html" (StringValue "")) props
           body <- runInputPost $ ireq textField "body"
-          let props'' = Property "text.html" (StringValue $ T.unpack body) : props'
-          result <- liftIO $ runEitherT $ writeNode $ node { node_props = props'' }
-          case result of
-            Left ioe -> liftIO $ throwIO ioe
-            --Right _  -> redirect $ joinPath ("/content/" : (map unpack pieces))
-            Right _ -> withUrlRenderer [hamlet||]
+          liftIO $ runEitherT $ writeProperty node "text.html" (BL8.pack $ T.unpack body)
+          --redirect $ joinPath ("/content/" : (map unpack pieces))
+          withUrlRenderer [hamlet||]
 
 getContentR :: ContentPath -> Handler Html
 getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
@@ -444,10 +437,9 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
         Left _ -> notFound
         Right node | null (node_path node) -> redirect ("/content/welcome" :: String)
         Right node -> do
-            let prop = case getProperty node "text.html" of
-                           Just p  -> show $ prop_value p
-                           Nothing -> ""
-            toWidget $ preEscapedToMarkup prop
+          res <- liftIO $ runEitherT $ liftM show $ getProperty node "text.html"
+          prop <- either (fail.show) return res
+          toWidget $ preEscapedToMarkup prop
 
 ------------------------------------------------------------------------------------------
 --- Navigation
@@ -634,8 +626,8 @@ galleryNavigation path = do
 getContentUrlFromNode :: Node -> String
 getContentUrlFromNode = ("/content/" ++) . urlToString . node_path
 
-getTitlePropertyOrEmpty :: Node -> String
-getTitlePropertyOrEmpty = maybe "" show . fmap prop_value . flip getProperty ("title" :: String)
+getTitlePropertyOrEmpty :: Node -> RepositoryContext String
+getTitlePropertyOrEmpty node = liftM show $ getProperty node "title"
 
 getTrail :: Node -> RepositoryContext [Node]
 getTrail node = do nodes       <- tail <$> getParentNodes node -- tail: omit root node
@@ -658,40 +650,6 @@ getParentNodes node = foldrM appendToNodes [node] $ node_path node
 ------------------------------------------------------------------------------------------
 --- Member Calendar
 ------------------------------------------------------------------------------------------
-
-data Event = Event { evTitle       :: Text
-                   , evStartDate   :: DateTime
-                   , evEndDate     :: Maybe DateTime
-                   , evDescription :: Maybe Text
-                   , evLocation    :: Maybe Text
-                   } deriving (Show)
-
-instance Persistent Event where
-
-    fromNode node = Event (T.pack $ node_name node)
-                          (fromMaybe startOfTime $ dateProperty "startDate")
-                          (dateProperty "endDate")
-                          (textProperty "description")
-                          (textProperty "location")
-      where textProperty p = T.pack . show . prop_value <$> getProperty node p
-            dateProperty = fromSqlString . show . maybe (StringValue "") prop_value . getProperty node
-
-    toNode repo eventName event = Node eventName
-                                         (urlFromString eventName)
-                                         [ Property "startDate"   $ StringValue $          toSqlString        $ evStartDate   event
-                                         , Property "endDate"     $ StringValue $ maybe "" toSqlString        $ evEndDate     event
-                                         , Property "description" $ StringValue $ T.unpack     $ fromMaybe "" $ evDescription event
-                                         , Property "location"    $ StringValue $ T.unpack     $ fromMaybe "" $ evLocation    event
-                                         ]
-                                         repo
-
-instance ToJSON Event where
-    toJSON Event {..} = object [ "title"       .=                               evTitle
-                               , "startDate"   .=               toSqlString     evStartDate
-                               , "endDate"     .= fromMaybe "" (toSqlString <$> evEndDate)
-                               , "description" .= fromMaybe ""                  evDescription
-                               , "location"    .= fromMaybe ""                  evLocation
-                               ]
 
 getMemberCalendarR :: Handler ()
 getMemberCalendarR = do
@@ -726,19 +684,11 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
   where renderEvents :: HasContentType a => ([Event] -> Handler a) -> Handler a
         renderEvents as = do
               app          <- getYesod
-              eitherEvents <- liftIO $ runEitherT $ getNode (calendarRepo app) url >>= getEventList
+              eitherEvents <- liftIO $ runEitherT $ getEventsForMonth (calendarRepo app) year month
               case eitherEvents of
                   Left  e      -> do $logError $ T.pack $ show e
                                      as ([] :: [Event])
                   Right events -> as events
-
-        url = map (pathCompFromString . show) [year, month]
-
-        getEventList :: Node -> RepositoryContext [Event]
-        getEventList node = do
-         nodes     <- getChildNodesRecursively node
-         let nodes' = filter ((== 4) . length . node_path) nodes
-         return $ map fromNode nodes'
 
         eventId event = T.pack $ intercalate "/" [show year', show month', toSqlString $ evStartDate event, T.unpack $ evTitle event]
             where (year', month', _) = toGregorian' $ evStartDate event
@@ -792,75 +742,26 @@ postEventR name = do
 --- Member List
 ------------------------------------------------------------------------------------------
 
--- TODO: Template Haskell was probably invented for this kind of boilerplate stuff...
-
-data Member = Member { firstname :: Text
-                     , name      :: Text
-                     , address   :: Maybe Text
-                     , locality  :: Maybe Text
-                     , status    :: Text
-                     , phone     :: Maybe Text
-                     , mobile    :: Maybe Text
-                     , email     :: Maybe Text
-                     } deriving (Show, Eq)
-
-instance Ord Member where
-  compare a b = compare (key a) (key b)
-    where
-      key m = show (name m) ++ show (firstname m)
-
-instance ToJSON Member where
-    toJSON Member {..} = object ["firstname"  .= firstname
-                                ,"name"       .= name
-                                ,"address"    .= address
-                                ,"locality"   .= locality
-                                ,"status"     .= status
-                                ,"phone"      .= phone
-                                ,"mobile"     .= mobile
-                                ,"email"      .= email
-                                ]
-
-instance Persistent Member where
-    fromNode node = Member (req_property "firstname")
-                           (req_property "name")
-                           (opt_property "address")
-                           (opt_property "locality")
-                           (req_property "status")
-                           (opt_property "phone")
-                           (opt_property "mobile")
-                           (opt_property "email")
-      where req_property = T.pack . show . fromMaybe (StringValue "") . liftM prop_value . getProperty node
-            opt_property pname = (T.pack . show) <$> liftM prop_value (getProperty node pname)
-    toNode repo memberName member = Node memberName
-                                         (urlFromString memberName)
-                                         [ Property "firstname" $ StringValue $ T.unpack $                firstname member
-                                         , Property "name"      $ StringValue $ T.unpack $                name      member
-                                         , Property "address"   $ StringValue $ T.unpack $ fromMaybe "" $ address   member
-                                         , Property "locality"  $ StringValue $ T.unpack $ fromMaybe "" $ locality  member
-                                         , Property "status"    $ StringValue $ T.unpack $                status    member
-                                         , Property "phone"     $ StringValue $ T.unpack $ fromMaybe "" $ phone     member
-                                         , Property "mobile"    $ StringValue $ T.unpack $ fromMaybe "" $ mobile    member
-                                         , Property "email"     $ StringValue $ T.unpack $ fromMaybe "" $ email     member
-                                         ]
-                                         repo
-
 memberForm :: Maybe Member -> Html -> MForm Handler (FormResult Member, Widget)
-memberForm mmember = renderDivs $ Member
-    <$> areq textField "Vorname" (firstname <$> mmember)
-    <*> areq textField "Name"    (name      <$> mmember)
-    <*> aopt textField "Strasse" (address   <$> mmember)
-    <*> aopt textField "Ort"     (locality  <$> mmember)
-    <*> areq textField "Status"  (status    <$> mmember)
-    <*> aopt textField "Telefon" (phone     <$> mmember)
-    <*> aopt textField "Mobile"  (mobile    <$> mmember)
-    <*> aopt textField "E-Mail"  (email     <$> mmember)
+memberForm mmember = do
+  app <- getYesod
+  let repo = memberRepo app
+  renderDivs $ Member repo
+    <$> areq textField "Vorname" (memFirstname <$> mmember)
+    <*> areq textField "Name"    (memName      <$> mmember)
+    <*> areq textField "Strasse" (memAddress   <$> mmember)
+    <*> areq textField "Ort"     (memLocality  <$> mmember)
+    <*> areq textField "Status"  (memStatus    <$> mmember)
+    <*> areq textField "Telefon" (memPhone     <$> mmember)
+    <*> areq textField "Mobile"  (memMobile    <$> mmember)
+    <*> areq textField "E-Mail"  (memEmail     <$> mmember)
 
 getMemberR :: Text -> Handler Html
-getMemberR name = do app               <- getYesod
-                     eitherMember      <- liftIO $ readItem (memberRepo app) (T.unpack name)
-                     let mmember       =  either (\e -> trace (show e) Nothing)
-                                                 Just
-                                                 eitherMember
+getMemberR name = do app          <- getYesod
+                     eitherMember <- liftIO $ runEitherT $ readItem (memberRepo app) (T.unpack name)
+                     let mmember  =  either (\e -> trace (show e) Nothing)
+                                            Just
+                                            eitherMember
                      (widget, encType) <- generateFormPost $ memberForm mmember
                      cbgLayout ["members", "list", "edit"] [whamlet|
                         <form method=post action=@{MemberR name} enctype=#{encType}>
@@ -871,8 +772,7 @@ getMemberR name = do app               <- getYesod
 postMemberR :: Text -> Handler Html
 postMemberR name = do
     ((result, widget), enctype) <- runFormPost $ memberForm Nothing
-    case result of FormSuccess member -> do app               <- getYesod
-                                            result' <- liftIO $ writeItem (memberRepo app) (T.unpack name) member
+    case result of FormSuccess member -> do result' <- liftIO $ runEitherT $ writeItem member
                                             case result' of
                                                 Left e -> return $ trace (show e) ()
                                                 _      -> return ()
@@ -900,14 +800,14 @@ getMemberListR = selectRep $ do
                             <th>E-Mail
                         $forall member <- members
                             <tr>
-                                <td>#{               firstname member}
-                                <td>#{               name      member}
-                                <td>#{fromMaybe "" $ address   member}
-                                <td>#{fromMaybe "" $ locality  member}
-                                <td>#{               status    member}
-                                <td>#{fromMaybe "" $ phone     member}
-                                <td>#{fromMaybe "" $ mobile    member}
-                                <td>#{fromMaybe "" $ email     member}
+                                <td>#{               memFirstname member}
+                                <td>#{               memName      member}
+                                <td>#{fromMaybe "" $ memAddress   member}
+                                <td>#{fromMaybe "" $ memLocality  member}
+                                <td>#{               memStatus    member}
+                                <td>#{fromMaybe "" $ memPhone     member}
+                                <td>#{fromMaybe "" $ memMobile    member}
+                                <td>#{fromMaybe "" $ memEmail     member}
                                 <td>
                                     <a href=@{MemberR $ memberId member}>
                                         <button>Edit
@@ -916,14 +816,11 @@ getMemberListR = selectRep $ do
   where renderMembers :: HasContentType a => ([Member] -> Handler a) -> Handler a
         renderMembers as = do
               app           <- getYesod
-              eitherMembers <- liftIO $ runEitherT $ getNode (memberRepo app) (urlFromString "/") >>= getMemberList
+              eitherMembers <- liftIO $ runEitherT $ getMemberList (memberRepo app)
               case eitherMembers of
                   Left  e       -> do $logError $ T.pack $ show e
                                       as ([] :: [Member])
                   Right members -> as members
-        memberId member = T.concat [name member, T.pack " ", firstname member]
-        getMemberList :: Node -> RepositoryContext [Member]
-        getMemberList node = liftM (sort . map fromNode) (getChildNodes node)
 
 
 ------------------------------------------------------------------------------------------

@@ -25,28 +25,31 @@ data Asset = Asset { assetRepo         :: Repository
              deriving (Show, Eq)
 
 instance Persistent Asset where
-  fromNode node = Asset (node_repo node)
-                        (urlToFilePath (node_path node))
-                        (node_name node)
-                        type'
-                        uploadedBy
-                        (fromMaybe startOfTime $ fromSqlString uploadedDate)
-    where
-      StringValue type' = maybe (StringValue "") prop_value $ getProperty node "type"
-      StringValue uploadedBy = maybe (StringValue "") prop_value $ getProperty node "uploadedBy"
-      StringValue uploadedDate = maybe (StringValue "") prop_value $ getProperty node "uploadedDate"
-  toNode _ _ asset = Node (assetName asset)
-                          (urlFromString $ assetPath asset)
-                          [type', uploadedBy, uploadedDate]
-                          (assetRepo asset)
-    where
-      type' =  Property "type" $ StringValue $ assetType asset
-      uploadedBy = Property "uploadedBy" $ StringValue $ assetUploadedBy asset
-      uploadedDate = Property "uploadedDate" $ StringValue $ toSqlString $ assetUploadedDate asset
+
+  writeItem _ = undefined
+
+  deleteItem _ = undefined
+
+  readItem repo path = do
+    node         <- getNode repo $ urlFromString path
+    type'        <- liftM show $ getProperty node "type"
+    uploadedBy   <- liftM show $ getProperty node "uploadedBy"
+    uploadedDate <- liftM show $ getProperty node "uploadedDate"
+    return $ Asset (node_repo node)
+                   (urlToFilePath (node_path node))
+                   (node_name node)
+                   type'
+                   uploadedBy
+                   (fromMaybe startOfTime $ fromSqlString uploadedDate)
+
+  toNode asset = Node (assetName asset)
+                      (urlFromString $ assetPath asset)
+                      []
+                      (assetRepo asset)
 
 -- exported
 assetRead :: Repository -> String -> RepositoryContext Asset
-assetRead repo path = liftM fromNode $ getNode repo $ urlFromString path
+assetRead = readItem
 
 -- exported
 assetBlob :: Asset -> String

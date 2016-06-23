@@ -16,9 +16,10 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     , getChildNodesRecursively
     , Property (..)
     , getProperty
+    , hasProperty
     , getPropertyPath
-    , readBlobProperty
-    , writeBlobProperty
+    , writeProperty
+    , deleteProperty
     , Value (..)
     , URL
     , urlFromString
@@ -29,21 +30,21 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     , pathCompFromFilePath
     , pathCompFromString
     , isRootNode
-    , Persistent (..)
+    , Persistent(..)
     )
 where
 
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
-import           Control.Monad                                (filterM, liftM)
-import           Control.Monad.Trans.Either                   (EitherT, left,
-                                                               runEitherT)
+import           Control.Monad                                (filterM)
+import           Control.Monad.Trans.Either                   (EitherT, left)
 import qualified Data.ByteString.Lazy                         as BL
 import           Data.List                                    (intercalate,
                                                                isSuffixOf)
 import           System.Directory                             (createDirectoryIfMissing,
                                                                doesDirectoryExist,
                                                                doesFileExist,
-                                                               getDirectoryContents)
+                                                               getDirectoryContents,
+                                                               removeFile)
 import           System.Exit                                  (ExitCode (..))
 import           System.FilePath                              (normalise,
                                                                splitDirectories,
@@ -68,7 +69,7 @@ pathCompFromFilePath = init . init -- remove ".n"/".p" suffix
 
 -- exported
 pathCompFromString :: String -> PathComponent
-pathCompFromString = id
+pathCompFromString s = if s == ".." then "" else filter (/= '/') s
 
 -- exported
 type URL = [PathComponent]
@@ -114,7 +115,7 @@ data Property = Property { prop_name  :: String
 -- exported
 data Node = Node { node_name  :: String
                  , node_path  :: URL
-                 , node_props :: ![Property]
+                 , node_props :: [String]
                  , node_repo  :: Repository
                  }
     deriving (Read, Show, Eq)
@@ -122,10 +123,10 @@ data Node = Node { node_name  :: String
 -- exported
 type RepositoryContext a = EitherT IOError IO a
 
-readProperties :: FilePath -> IO [Property]
-readProperties path = readFiles           >>=
-                      filterM filterFiles >>=
-                      mapM readProperty
+readPropertyNames :: FilePath -> IO [String]
+readPropertyNames path = readFiles           >>=
+                         filterM filterFiles >>=
+                         mapM (\(pname, _) -> return $ pathCompFromFilePath pname)
     where
           -- return a list of pairs (fileName, completePath), e.g. ("text.md", "content/welcome/text.md")
           readFiles :: IO [(FilePath, FilePath)]
@@ -133,56 +134,36 @@ readProperties path = readFiles           >>=
           filterFiles (_, path')     = do exists <- doesFileExist path'
                                           let isProp = isSuffixOf ".p" path'
                                           return $ exists && isProp
-          readProperty (name, path') = readFile path' >>= return . Property name . StringValue
-
-writeProperties :: [Property] -> FilePath -> IO ()
-writeProperties props path = mapM_ writeProperty props
-    where writeProperty prop = do let name     = prop_name prop ++ ".p"
-                                      value    = show $ prop_value prop
-                                      filePath = path </> name
-                                  writeFile filePath value
 
 -- exported
-getProperty :: Node -> String -> Maybe Property
-getProperty node pname = case props of
-  (prop:_) -> Just prop
-  _ -> Nothing
+getProperty :: Node -> String -> RepositoryContext BL.ByteString
+getProperty node pname = check $ BL.readFile $ getPropertyPath node pname
 
-  where props = filter (\p -> prop_name p == pname) $ node_props node
+-- exported
+hasProperty :: Node -> String -> RepositoryContext Bool
+hasProperty node pname = check $ doesFileExist $ getPropertyPath node pname
 
 -- exported
 getPropertyPath :: Node -> String -> FilePath
 getPropertyPath node pname = root repo </> path </> fileName
   where repo = node_repo node
         path = urlToFilePath $ node_path node
-        fileName = pname ++ ".p"
+        fileName = pathCompFromString pname ++ ".p"
 
 -- exported
-writeBlobProperty :: Node -> String -> BL.ByteString -> RepositoryContext ()
-writeBlobProperty node name bytes = do
-  let path = node_path node
-      path' = urlToFilePath path
-      repo  = node_repo node
-      fileName = name ++ ".blob"
-      filePath = root repo </> path' </> fileName
-  check $ BL.writeFile filePath bytes
+writeProperty :: Node -> String -> BL.ByteString -> RepositoryContext ()
+writeProperty node pname bytes = check $ BL.writeFile (getPropertyPath node pname) bytes
 
 -- exported
-readBlobProperty :: Node -> String -> RepositoryContext BL.ByteString
-readBlobProperty node name = do
-  let path = node_path node
-      path' = urlToFilePath path
-      repo = node_repo node
-      fileName = name ++ ".blob"
-      filePath = root repo </> path' </> fileName
-  check $ BL.readFile filePath
+deleteProperty :: Node -> String -> RepositoryContext ()
+deleteProperty node pname = check $ removeFile $ getPropertyPath node pname
 
 -- exported
 getNode :: Repository -> URL -> RepositoryContext Node
 getNode repo url = do let name       = case url of [] -> "/"
                                                    _  -> last url
                           filePath   = root repo </> urlToFilePath url
-                      props <- check (readProperties filePath)
+                      props <- check (readPropertyNames filePath)
                       return $ Node name url props repo
 
 --exported
@@ -191,9 +172,7 @@ writeNode node = check $ do let path     = node_path node
                                 path'    = urlToFilePath path
                                 repo     = node_repo node
                                 filePath = root repo </> path'
-                                props    = node_props node
                             createDirectoryIfMissing True filePath
-                            writeProperties props filePath
 
 --exported
 deleteNode :: Node -> RepositoryContext ()
@@ -253,12 +232,8 @@ getChildNodesRecursively node = do
 isRootNode :: Node -> Bool
 isRootNode n = node_path n == []
 
---exported
---deprecated: this abstraction is flawed
 class Persistent a where
-    toNode       :: Repository -> String -> a -> Node
-    fromNode     :: Node -> a
-    writeItem    :: Repository -> String -> a -> IO (Either IOError ())
-    writeItem repo name a = runEitherT $ writeNode $ toNode repo name a
-    readItem     :: Repository -> String -> IO (Either IOError a)
-    readItem repo name = runEitherT $ liftM fromNode $ getNode repo $ urlFromString name
+  writeItem  :: a -> RepositoryContext ()
+  readItem   :: Repository -> String -> RepositoryContext a
+  deleteItem :: a -> RepositoryContext ()
+  toNode     :: a -> Node
