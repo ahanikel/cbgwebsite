@@ -14,6 +14,7 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     , getChildNode
     , getChildNodes
     , getChildNodesRecursively
+    , getSiblingNames
     , Property (..)
     , getProperty
     , hasProperty
@@ -228,6 +229,20 @@ getChildNodesRecursively node = do
   nodes' <- mapM getChildNodesRecursively nodes
   return $ nodes ++ concat nodes'
 
+--exported
+getSiblingNames :: Node -> RepositoryContext [String]
+getSiblingNames node = do parent <- getParentNode node
+                          let path = urlToFilePath $ node_path $ parent
+                              repo = node_repo parent
+                              filePath = root repo </> path
+                          dirEntries <- check $ getDirectoryContents filePath
+                          let acceptable = (`notElem` [".", "..", node_name node])
+                              isNodeDir d = do let dir = filePath </> d
+                                               exists <- doesDirectoryExist dir
+                                               let isNode = ".n" `isSuffixOf` dir
+                                               return (exists && isNode)
+                          nodeDirs <- check $ filterM isNodeDir $ filter acceptable dirEntries
+                          return $ map pathCompFromFilePath nodeDirs
 --exported
 isRootNode :: Node -> Bool
 isRootNode n = node_path n == []

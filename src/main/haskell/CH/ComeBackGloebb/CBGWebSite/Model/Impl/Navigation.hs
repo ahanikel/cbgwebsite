@@ -13,3 +13,9 @@ data Navigation a = Navigation { navSelf     :: a
                                , navChildren :: [a]
                                }
                     deriving (Functor, Foldable, Traversable)
+
+children :: Node -> RepositoryContext [String]
+children = getChildNodeNames
+
+siblings :: Node -> RepositoryContext [String]
+siblings = getSiblingNames
