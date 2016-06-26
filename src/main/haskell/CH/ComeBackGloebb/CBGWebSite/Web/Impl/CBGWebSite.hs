@@ -18,46 +18,48 @@ import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Asset
 import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Event
 import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery
 import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Member
+import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Navigation
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
 import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
 
 -- Yesod
-import           Network.HTTP.Conduit                              (Manager)
+import           Network.HTTP.Conduit                               (Manager)
 import           Text.Hamlet
-import           Yesod                                             hiding
-                                                                    (deleteBy,
-                                                                    joinPath)
+import           Yesod                                              hiding
+                                                                     (deleteBy,
+                                                                     joinPath)
 import           Yesod.Auth
 import           Yesod.Auth.Account
 import           Yesod.Auth.GoogleEmail2
 import           Yesod.Static
 
 -- other imports
-import           Control.Concurrent                                (MVar)
-import           Control.Exception                                 (IOException)
-import           Control.Exception.Base                            (throwIO)
-import           Control.Monad                                     (liftM)
-import           Control.Monad.Trans.Either                        (left,
-                                                                    runEitherT)
-import qualified Data.ByteString                                   as B
-import qualified Data.ByteString.Lazy.Char8                        as BL8
-import qualified Data.ByteString.UTF8                              as U8
+import           Control.Concurrent                                 (MVar)
+import           Control.Exception                                  (IOException)
+import           Control.Exception.Base                             (throwIO)
+import           Control.Monad                                      (liftM)
+import           Control.Monad.Trans.Either                         (left,
+                                                                     runEitherT)
+import qualified Data.ByteString                                    as B
+import qualified Data.ByteString.Lazy.UTF8                          as UL8
+import qualified Data.ByteString.UTF8                               as U8
 import           Data.Conduit
-import qualified Data.Conduit.Binary                               as CB
+import qualified Data.Conduit.Binary                                as CB
 import           Data.DateTime
-import           Data.Foldable                                     (foldrM)
-import           Data.List                                         (deleteBy,
-                                                                    elemIndex,
-                                                                    intercalate,
-                                                                    sort)
-import           Data.Maybe                                        (fromMaybe)
-import           Data.Text                                         (Text)
-import qualified Data.Text                                         as T
-import qualified Data.Text.Lazy                                    as TL
-import           Database.Persist.Sqlite                           (ConnectionPool,
-                                                                    SqlBackend,
-                                                                    runSqlPool)
+import           Data.Foldable                                      (foldrM)
+import           Data.List                                          (deleteBy,
+                                                                     elemIndex,
+                                                                     intercalate,
+                                                                     sort)
+import           Data.Maybe                                         (fromMaybe)
+import           Data.Text                                          (Text)
+import qualified Data.Text                                          as T
+import qualified Data.Text.Lazy                                     as TL
+import qualified Data.Tree                                          as Tree
+import           Database.Persist.Sqlite                            (ConnectionPool,
+                                                                     SqlBackend,
+                                                                     runSqlPool)
 import           Debug.Trace
 import           Network.Mail.Mime
 
@@ -355,7 +357,7 @@ editLayout :: [Text] -> Widget -> Handler Html
 editLayout path = cbgLayout ("edit" : path) . withBootstrap . editPage
 
 getRootR :: Handler ()
-getRootR = redirect ("/content/welcome" :: String)
+getRootR = redirect ("/content" :: String)
 
 getFavR :: Handler ()
 getFavR = sendFile "image/png" "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static/cbg-favicon.png"
@@ -403,9 +405,8 @@ getEditContentR (ContentPath pieces) = do
         getNode (contentRepo app) url
     case eitherNode of
         Left _ -> notFound
-        Right node | null (node_path node) -> redirect ("/content/welcome" :: String)
         Right node -> do
-          res <- liftIO $ runEitherT $ liftM show $ getProperty node "text.html"
+          res <- liftIO $ runEitherT $ liftM UL8.toString $ getProperty node "text.html"
           prop <- either (fail . show) return res
           let contentBody = toWidget $ toHtml prop
           -- let propertiesWidget =
@@ -420,10 +421,9 @@ postEditContentR (ContentPath pieces) = do
         getNode (contentRepo app) url
     case eitherNode of
         Left _ -> notFound
-        Right node | null (node_path node) -> notFound
         Right node -> do
           body <- runInputPost $ ireq textField "body"
-          liftIO $ runEitherT $ writeProperty node "text.html" (BL8.pack $ T.unpack body)
+          liftIO $ runEitherT $ writeProperty node "text.html" (UL8.fromString $ T.unpack body)
           --redirect $ joinPath ("/content/" : (map unpack pieces))
           withUrlRenderer [hamlet||]
 
@@ -435,9 +435,8 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
         getNode (contentRepo app) url
     case eitherNode of
         Left _ -> notFound
-        Right node | null (node_path node) -> redirect ("/content/welcome" :: String)
         Right node -> do
-          res <- liftIO $ runEitherT $ liftM show $ getProperty node "text.html"
+          res <- liftIO $ runEitherT $ liftM UL8.toString $ getProperty node "text.html"
           prop <- either (fail.show) return res
           toWidget $ preEscapedToMarkup prop
 
@@ -453,16 +452,16 @@ navigationWidget maybeAuthId' path = do
                            case path' of
                                ("content" : _) ->
                                    [whamlet|
-                                               <li .expanded>
-                                                   <a href=@{RootR} title=Willkommen>Willkommen
-                                                   ^{contentNavigation path}
+                                             ^{contentNavigationFromRoot}
+                                             <ul .menu>
                                                <li .collapsed>
-                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
+                                                 <a href=@{MembersR} title="Mitglieder">Mitglieder
                                                <li .collapsed>
-                                                   <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                                 <a href=@{GalleriesR} title=Fotoalben>Fotoalben
                                    |]
                                ("members" : _) ->
                                    [whamlet|
+                                             <ul .menu>
                                                <li .collapsed>
                                                    <a href=@{RootR} title=Willkommen>Willkommen
                                                <li .expanded>
@@ -474,105 +473,107 @@ navigationWidget maybeAuthId' path = do
                                                            <a href=@{MemberListR} title=Mitgliederliste>Mitgliederliste
                                                        <li .leaf>
                                                            <a href=@{AssetR $ ContentPath ["Verein", "Statuten", "Statuten.pdf"]} title=Statuten>Statuten
-                                               <li .collapsed>
-                                                   <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                                       <li .collapsed>
+                                                           <a href=@{GalleriesR} title=Fotoalben>Fotoalben
                                    |]
                                ("galleries" : _) ->
                                    [whamlet|
+                                             <ul .menu>
                                                <li .collapsed>
                                                    <a href=@{RootR} title=Willkommen>Willkommen
-                                               <li .collapsed>
-                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
                                                <li .expanded>
-                                                   <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
                                                    <ul .menu>
-                                                       ^{galleryNavigation path}
+                                                       <li .expanded>
+                                                           <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                                           <ul .menu>
+                                                               ^{galleryNavigation path}
                                    |]
                                ("gallery" : _) ->
                                    [whamlet|
+                                             <ul .menu>
                                                <li .collapsed>
                                                    <a href=@{RootR} title=Willkommen>Willkommen
-                                               <li .collapsed>
-                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
                                                <li .expanded>
-                                                   <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
                                                    <ul .menu>
-                                                       ^{galleryNavigation path}
+                                                       <li .expanded>
+                                                           <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                                           <ul .menu>
+                                                               ^{galleryNavigation path}
                                    |]
                                _ ->
                                    [whamlet|
+                                             <ul .menu>
                                                <li .collapsed>
                                                    <a href=@{RootR} title=Willkommen>Willkommen
                                                <li .collapsed>
                                                    <a href=@{MembersR} title="Mitglieder">Mitglieder
-                                               <li .collapsed>
-                                                   <a href=@{GalleriesR} title=Fotoalben>Fotoalben
                                    |]
                        Nothing ->
                                [whamlet|
-                                       <li .expanded>
-                                           <a href=@{RootR} title=Willkommen>Willkommen
-                                           <ul .menu>
-                                               ^{contentNavigation path}
-                                       <li .leaf .last>
-                                           <a href=@{AuthR LoginR} title="Mitglieder">Mitglieder
+                                               ^{contentNavigationFromRoot}
+                                               <ul .menu>
+                                                   <li .leaf .last>
+                                                       <a href=@{AuthR LoginR} title="Mitglieder">Mitglieder
                                |]
     [whamlet|
         <div #block-menu-primary-links .clear-block .block .block-menu>
             <h1>Come Back Glöbb
             <div .content>
-                <ul .menu>
-                    ^{casePart}
-                    <li .leaf .last>
-                        <a href=@{AuthR LogoutR} title="Logout">Logout
+                ^{casePart}
     |]
+
+contentNavigationFromRoot :: Widget
+contentNavigationFromRoot = contentNavigation ["content"]
 
 contentNavigation :: [Text] -> Widget
 contentNavigation path = do app         <- getYesod
-                            eitherNodes <- liftIO $ runEitherT $ do
-                                let path'    =  map T.unpack path
-                                let repoPath =  case path' of
-                                                    ("content" : rest)          -> rest
-                                                    ("edit" : "content" : rest) -> rest
-                                                    _                           -> fail "no content node"
-                                node         <- getNode (contentRepo app) repoPath
-                                parent       <- getParentNode node
-                                siblingNames <- getChildNodeNames parent
-                                siblings     <- mapM (getChildNode parent) siblingNames
-                                childNames   <- getChildNodeNames node
-                                children     <- mapM (getChildNode node) childNames
-                                welcome      <- getNode (node_repo node) ["welcome"]
-                                return (node, parent, siblings, children, welcome)
+                            let path'    =  map T.unpack path
+                            let repoPath =  case path' of
+                                                ("content" : rest)          -> rest
+                                                ("edit" : "content" : rest) -> rest
+                                                _                           -> fail "no content node"
+                            eitherNodes <- liftIO $ runEitherT $ getNavigation (contentRepo app) (urlFromStrings repoPath) 2
                             case eitherNodes of
                                 Left _ ->
-                                    return ()
-                                Right (node, parent, siblings, children, welcome) -> do
-                                    let subnavi = [whamlet|
-                                        $forall entry <- siblings
-                                            $if entry == welcome
-                                            $elseif entry == node
-                                                <li .expanded>
-                                                    <a href=#{url entry} title=#{title entry}>#{title entry}
-                                                    <ul .menu>
-                                                        $forall child <- children
-                                                            <li>
-                                                                <a href=#{url child} title=#{title child}>#{title child}
-                                            $else
-                                                <li .collapsed>
-                                                    <a href=#{url entry} title=#{title entry}>#{title entry}
-                                    |]
-                                    [whamlet|
-                                        <ul .menu>
-                                            $if node_path parent == []
-                                                ^{subnavi}
-                                            $else
-                                                <li .expanded>
-                                                    <a href=#{url parent} title=#{title parent}>#{title parent}
-                                                    <ul .menu>
-                                                        ^{subnavi}
-                                    |]
-    where url   = getContentUrlFromNode
-          title = getTitlePropertyOrEmpty
+                                  return ()
+                                Right navi ->
+                                  renderNavi navi
+
+renderNavi :: Navigation NavigationEntry -> Widget
+renderNavi Navigation {..} = do
+  let self     = Tree.rootLabel navTree
+      siblings = sort (self : navSiblings)
+      children = Tree.subForest navTree
+      url      = getContentUrlFromURL . neURL
+  [whamlet|
+    <ul .menu>
+      $forall entry <- siblings
+        $if entry == self
+          <li .collapsed>
+            <a href=#{url self} title=#{neTitle self}>#{neTitle self}
+            $if (not . null) children
+              $forall child <- children
+                ^{renderTree child}
+        $else
+          <li .collapsed>
+            <a href=#{url entry} title=#{neTitle entry}>#{neTitle entry}
+  |]
+
+renderTree :: Tree.Tree NavigationEntry -> Widget
+renderTree tree = do
+  let url  = getContentUrlFromURL . neURL
+      self = Tree.rootLabel tree
+      children = Tree.subForest tree
+  [whamlet|
+    <ul .menu>
+      <li .expanded>
+        <a href=#{url self} title=#{neTitle self}>#{neTitle self}
+        $if (not . null) children
+          $forall child <- children
+            ^{renderTree child}
+  |]
 
 auditTrail :: [Text] -> Widget
 auditTrail path = do app         <- getYesod
@@ -589,10 +590,9 @@ auditTrail path = do app         <- getYesod
                              return ()
                          Right nodes -> mapM_ encodeTrail nodes
     where encodeTrail n = [whamlet|<li .menu-123 .collapsed>
-                                       <a href=#{url n} title=#{title n}>#{title n}
+                                       <a href=#{url n} title=#{neTitle n}>#{neTitle n}
                           |]
-          url   = getContentUrlFromNode
-          title = getTitlePropertyOrEmpty
+          url   = getContentUrlFromURL . neURL
 
 galleryNavigation :: [Text] -> Widget
 galleryNavigation path = do
@@ -623,29 +623,9 @@ galleryNavigation path = do
           |]
 
 
-getContentUrlFromNode :: Node -> String
-getContentUrlFromNode = ("/content/" ++) . urlToString . node_path
+getContentUrlFromURL :: URL -> String
+getContentUrlFromURL = ("/content/" ++) . urlToString
 
-getTitlePropertyOrEmpty :: Node -> RepositoryContext String
-getTitlePropertyOrEmpty node = liftM show $ getProperty node "title"
-
-getTrail :: Node -> RepositoryContext [Node]
-getTrail node = do nodes       <- tail <$> getParentNodes node -- tail: omit root node
-                   if null nodes
-                   then left $ userError "no root"
-                   else do
-                      welcome  <- getNode (node_repo node) (urlFromString "/welcome")
-                      let first = node_path $ head nodes
-                      case first of ["welcome"] -> return nodes
-                                    _           -> return (welcome : nodes)
-
-getParentNodes :: Node -> RepositoryContext [Node]
-getParentNodes node = foldrM appendToNodes [node] $ node_path node
-    where
-          appendToNodes :: PathComponent -> [Node] -> RepositoryContext [Node]
-          appendToNodes _ (n : ns) = do p <- getParentNode n
-                                        return (p : n : ns)
-          appendToNodes _ _ = undefined
 
 ------------------------------------------------------------------------------------------
 --- Member Calendar
@@ -674,8 +654,8 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
                         <td>#{               toSqlString  $  evStartDate   event}
                         <td>#{fromMaybe "" $ toSqlString <$> evEndDate     event}
                         <td>#{                               evTitle       event}
-                        <td>#{fromMaybe "" $                 evLocation    event}
-                        <td>#{fromMaybe "" $                 evDescription event}
+                        <td>#{                               evLocation    event}
+                        <td>#{                               evDescription event}
                         <td>
                             <a href=@{EventR $ eventId event}>
                                 <button>Edit
@@ -693,25 +673,27 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
         eventId event = T.pack $ intercalate "/" [show year', show month', toSqlString $ evStartDate event, T.unpack $ evTitle event]
             where (year', month', _) = toGregorian' $ evStartDate event
 
-eventForm :: Maybe Event -> Html -> MForm Handler (FormResult Event, Widget)
-eventForm mevent = renderDivs $ makeEvent
+eventForm :: CBGWebSite -> Maybe Event -> Html -> MForm Handler (FormResult Event, Widget)
+eventForm app mevent = do
+  renderDivs $ makeEvent (contentRepo app)
     <$> areq textField "Titel"        (                                fmap evTitle       mevent)
     <*> areq textField "Startdatum"   (     (T.pack . toSqlString) <$> fmap evStartDate   mevent)
     <*> aopt textField "Enddatum"     (fmap (T.pack . toSqlString) <$> fmap evEndDate     mevent)
-    <*> aopt textField "Beschreibung" (                                fmap evDescription mevent)
-    <*> aopt textField "Ort"          (                                fmap evLocation    mevent)
-  where makeEvent :: Text -> Text -> Maybe Text -> Maybe Text -> Maybe Text -> Event
-        makeEvent title start end = Event title
-                                          (fromMaybe startOfTime $ fromSqlString $ T.unpack     start)
-                                          (fromMaybe Nothing     $ fromSqlString . T.unpack <$> end)
+    <*> areq textField "Beschreibung" (                                fmap evDescription mevent)
+    <*> areq textField "Ort"          (                                fmap evLocation    mevent)
+  where makeEvent :: Repository -> Text -> Text -> Maybe Text -> Text -> Text -> Event
+        makeEvent repo title start end = Event repo
+                                               title
+                                               (fromMaybe startOfTime $ fromSqlString $ T.unpack     start)
+                                               (fromMaybe Nothing     $ fromSqlString . T.unpack <$> end)
 
 getEventR :: Text -> Handler Html
 getEventR name = do app               <- getYesod
-                    eitherEvent       <- liftIO $ readItem (calendarRepo app) (T.unpack name)
+                    eitherEvent       <- liftIO $ runEitherT $ readItem (calendarRepo app) (T.unpack name)
                     let mevent        =  either (\e -> trace (show e) Nothing)
                                                 Just
                                                 eitherEvent
-                    (widget, encType) <- generateFormPost $ eventForm mevent
+                    (widget, encType) <- generateFormPost $ eventForm app mevent
                     cbgLayout ["members", "event"] [whamlet|
                        <form method=post action=@{EventR name} enctype=#{encType}>
                            ^{widget}
@@ -720,31 +702,31 @@ getEventR name = do app               <- getYesod
 
 postEventR :: Text -> Handler Html
 postEventR name = do
-    ((result, widget), enctype) <- runFormPost $ eventForm Nothing
-    case result of FormSuccess event -> do app               <- getYesod
-                                           let strName       =  T.unpack name
-                                           -- this should actually be removeItem (old path) >> writeItem (new path)
-                                           result' <- liftIO $ writeItem (calendarRepo app) strName event
-                                           case result' of
-                                               Left e -> return $ trace (show e) ()
-                                               _      -> return ()
-                                           let (year, month, _) = toGregorian' $ evStartDate event
-                                           redirect $ MemberCalendarMR (fromInteger year) month
-                   _                 -> cbgLayout ["members", "event"] [whamlet|
-                                            <p>Da stimmt etwas nicht, versuch's nochmal
-                                            <form method=post action=@{EventR name} enctype=#{enctype}>
-                                                ^{widget}
-                                                <button>Submit
-                                        |]
+  app <- getYesod
+  ((result, widget), enctype) <- runFormPost $ eventForm app Nothing
+  case result of FormSuccess event -> do app               <- getYesod
+                                         let strName       =  T.unpack name
+                                         -- this should actually be removeItem (old path) >> writeItem (new path)
+                                         result' <- liftIO $ runEitherT $ writeItem event
+                                         case result' of
+                                             Left e -> return $ trace (show e) ()
+                                             _      -> return ()
+                                         let (year, month, _) = toGregorian' $ evStartDate event
+                                         redirect $ MemberCalendarMR (fromInteger year) month
+                 _                 -> cbgLayout ["members", "event"] [whamlet|
+                                          <p>Da stimmt etwas nicht, versuch's nochmal
+                                          <form method=post action=@{EventR name} enctype=#{enctype}>
+                                              ^{widget}
+                                              <button>Submit
+                                      |]
 
 
 ------------------------------------------------------------------------------------------
 --- Member List
 ------------------------------------------------------------------------------------------
 
-memberForm :: Maybe Member -> Html -> MForm Handler (FormResult Member, Widget)
-memberForm mmember = do
-  app <- getYesod
+memberForm :: CBGWebSite -> Maybe Member -> Html -> MForm Handler (FormResult Member, Widget)
+memberForm app mmember = do
   let repo = memberRepo app
   renderDivs $ Member repo
     <$> areq textField "Vorname" (memFirstname <$> mmember)
@@ -762,7 +744,7 @@ getMemberR name = do app          <- getYesod
                      let mmember  =  either (\e -> trace (show e) Nothing)
                                             Just
                                             eitherMember
-                     (widget, encType) <- generateFormPost $ memberForm mmember
+                     (widget, encType) <- generateFormPost $ memberForm app mmember
                      cbgLayout ["members", "list", "edit"] [whamlet|
                         <form method=post action=@{MemberR name} enctype=#{encType}>
                             ^{widget}
@@ -771,18 +753,19 @@ getMemberR name = do app          <- getYesod
 
 postMemberR :: Text -> Handler Html
 postMemberR name = do
-    ((result, widget), enctype) <- runFormPost $ memberForm Nothing
-    case result of FormSuccess member -> do result' <- liftIO $ runEitherT $ writeItem member
-                                            case result' of
-                                                Left e -> return $ trace (show e) ()
-                                                _      -> return ()
-                                            redirect MemberListR
-                   _                  -> cbgLayout ["members", "list", "edit"] [whamlet|
-                                             <p>Da stimmt etwas nicht, versuch's nochmal
-                                             <form method=post action=@{MemberR name} enctype=#{enctype}>
-                                                 ^{widget}
-                                                 <button>Submit
-                                         |]
+  app <- getYesod
+  ((result, widget), enctype) <- runFormPost $ memberForm app Nothing
+  case result of FormSuccess member -> do result' <- liftIO $ runEitherT $ writeItem member
+                                          case result' of
+                                              Left e -> return $ trace (show e) ()
+                                              _      -> return ()
+                                          redirect MemberListR
+                 _                  -> cbgLayout ["members", "list", "edit"] [whamlet|
+                                           <p>Da stimmt etwas nicht, versuch's nochmal
+                                           <form method=post action=@{MemberR name} enctype=#{enctype}>
+                                               ^{widget}
+                                               <button>Submit
+                                       |]
 
 getMemberListR :: Handler TypedContent
 getMemberListR = selectRep $ do
@@ -800,14 +783,14 @@ getMemberListR = selectRep $ do
                             <th>E-Mail
                         $forall member <- members
                             <tr>
-                                <td>#{               memFirstname member}
-                                <td>#{               memName      member}
-                                <td>#{fromMaybe "" $ memAddress   member}
-                                <td>#{fromMaybe "" $ memLocality  member}
-                                <td>#{               memStatus    member}
-                                <td>#{fromMaybe "" $ memPhone     member}
-                                <td>#{fromMaybe "" $ memMobile    member}
-                                <td>#{fromMaybe "" $ memEmail     member}
+                                <td>#{memFirstname member}
+                                <td>#{memName      member}
+                                <td>#{memAddress   member}
+                                <td>#{memLocality  member}
+                                <td>#{memStatus    member}
+                                <td>#{memPhone     member}
+                                <td>#{memMobile    member}
+                                <td>#{memEmail     member}
                                 <td>
                                     <a href=@{MemberR $ memberId member}>
                                         <button>Edit

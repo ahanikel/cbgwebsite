@@ -8,7 +8,7 @@ import           Control.Monad                                     (liftM)
 import           Data.Aeson                                        (ToJSON (..),
                                                                     object,
                                                                     (.=))
-import qualified Data.ByteString.Lazy.Char8                        as BL8
+import qualified Data.ByteString.Lazy.UTF8                         as UL8
 import           Data.DateTime                                     (DateTime, fromSqlString,
                                                                     startOfTime,
                                                                     toSqlString)
@@ -29,16 +29,16 @@ instance Persistent Event where
   writeItem ev @ Event {..}  = do
     let n = toNode ev
     writeNode n
-    writeProperty n "title"       $ BL8.pack $ T.unpack               evTitle
-    writeProperty n "startDate"   $ BL8.pack $ toSqlString            evStartDate
-    writeProperty n "endDate"     $ maybe "" (BL8.pack . toSqlString) evEndDate
-    writeProperty n "description" $ BL8.pack $ T.unpack               evDescription
-    writeProperty n "location"    $ BL8.pack $ T.unpack               evLocation
+    writeProperty n "title"       $ UL8.fromString $ T.unpack               evTitle
+    writeProperty n "startDate"   $ UL8.fromString $ toSqlString            evStartDate
+    writeProperty n "endDate"     $ maybe "" (UL8.fromString . toSqlString) evEndDate
+    writeProperty n "description" $ UL8.fromString $ T.unpack               evDescription
+    writeProperty n "location"    $ UL8.fromString $ T.unpack               evLocation
 
   readItem repo path = do
     node            <- getNode repo (urlFromString path)
-    let textProperty = liftM (T.pack . show) . getProperty node
-        dateProperty = liftM (fromSqlString . show) . getProperty node
+    let textProperty = liftM (T.pack . UL8.toString) . getProperty node
+        dateProperty = liftM (fromSqlString . UL8.toString) . getProperty node
     startDate       <- dateProperty "startDate"
     endDate         <- dateProperty "endDate"
     description     <- textProperty "description"

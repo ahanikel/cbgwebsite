@@ -22,6 +22,7 @@ import           Control.Monad                                     (liftM,
                                                                     unless,
                                                                     when)
 import qualified Data.ByteString.Lazy                              as BL
+import qualified Data.ByteString.Lazy.UTF8                         as UL8
 import           Data.DateTime                                     (DateTime, fromSqlString,
                                                                     getCurrentTime,
                                                                     startOfTime,
@@ -60,12 +61,13 @@ instance Ord Gallery where
 
 instance Persistent Gallery where
 
+  -- TODO: write the properties
   writeItem g = writeNode $ toNode g
 
   readItem repo gname = do
     gnode   <- getNode repo $ urlFromString gname
     inames  <- getChildNodeNames gnode
-    sortKey <- liftM show $ getProperty gnode "sortKey"
+    sortKey <- liftM UL8.toString $ getProperty gnode "sortKey"
     return $ Gallery repo gname (sort inames) sortKey
 
   deleteItem g = deleteNode $ toNode g
@@ -76,15 +78,16 @@ instance Persistent Gallery where
 
 instance Persistent Image where
 
+  -- TODO: write the properties
   writeItem i = writeNode $ toNode i
 
   readItem repo path = do
     inode        <- getNode repo (urlFromString path)
     let name      = node_name inode
-    type'        <- liftM show $ getProperty inode "type"
+    type'        <- liftM UL8.toString $ getProperty inode "type"
     let gallery   = head $ node_path inode
-    uploadedBy   <- liftM show $ getProperty inode "uploadedBy"
-    uploadedDate <- liftM (fromMaybe startOfTime . fromSqlString . show) $ getProperty inode "uploadedDate"
+    uploadedBy   <- liftM UL8.toString $ getProperty inode "uploadedBy"
+    uploadedDate <- liftM (fromMaybe startOfTime . fromSqlString . UL8.toString) $ getProperty inode "uploadedDate"
     return $ Image repo name type' gallery uploadedBy uploadedDate
 
   deleteItem i = do

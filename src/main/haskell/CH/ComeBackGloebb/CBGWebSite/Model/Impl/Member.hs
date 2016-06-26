@@ -8,7 +8,7 @@ import           Control.Monad                                     (liftM)
 import           Data.Aeson                                        (ToJSON (..),
                                                                     object,
                                                                     (.=))
-import qualified Data.ByteString.Lazy.Char8                        as BL8
+import qualified Data.ByteString.Lazy.UTF8                         as UL8
 import           Data.List                                         (sort)
 import qualified Data.Text                                         as T
 
@@ -43,7 +43,7 @@ instance Persistent Member where
 
   readItem repo path = do
     node        <- getNode repo (urlFromString path)
-    let property = liftM (T.pack . show) . getProperty node
+    let property = liftM (T.pack . UL8.toString) . getProperty node
     firstname   <- property "firstname"
     name        <- property "name"
     address     <- property "address"
@@ -65,14 +65,14 @@ instance Persistent Member where
   writeItem member @ Member {..} = do
     let n = toNode member
     writeNode n
-    writeProperty n "firstname" $ BL8.pack $ T.unpack memFirstname
-    writeProperty n "name"      $ BL8.pack $ T.unpack memName
-    writeProperty n "address"   $ BL8.pack $ T.unpack memAddress
-    writeProperty n "locality"  $ BL8.pack $ T.unpack memLocality
-    writeProperty n "status"    $ BL8.pack $ T.unpack memStatus
-    writeProperty n "phone"     $ BL8.pack $ T.unpack memPhone
-    writeProperty n "mobile"    $ BL8.pack $ T.unpack memMobile
-    writeProperty n "email"     $ BL8.pack $ T.unpack memEmail
+    writeProperty n "firstname" $ UL8.fromString $ T.unpack memFirstname
+    writeProperty n "name"      $ UL8.fromString $ T.unpack memName
+    writeProperty n "address"   $ UL8.fromString $ T.unpack memAddress
+    writeProperty n "locality"  $ UL8.fromString $ T.unpack memLocality
+    writeProperty n "status"    $ UL8.fromString $ T.unpack memStatus
+    writeProperty n "phone"     $ UL8.fromString $ T.unpack memPhone
+    writeProperty n "mobile"    $ UL8.fromString $ T.unpack memMobile
+    writeProperty n "email"     $ UL8.fromString $ T.unpack memEmail
 
   deleteItem = deleteNode . toNode
 

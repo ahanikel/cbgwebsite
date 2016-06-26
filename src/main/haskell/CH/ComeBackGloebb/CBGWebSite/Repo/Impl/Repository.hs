@@ -1,5 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
-
 module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     ( Repository (..)
     , openRepository
@@ -25,6 +23,7 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     , Value (..)
     , URL
     , urlFromString
+    , urlFromStrings
     , urlToString
     , urlFromFilePath
     , urlToFilePath
@@ -37,7 +36,7 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 where
 
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
-import           Control.Monad                                (filterM)
+import           Control.Monad                                (filterM, liftM)
 import           Control.Monad.Trans.Either                   (EitherT, left)
 import qualified Data.ByteString.Lazy                         as BL
 import           Data.List                                    (intercalate,
@@ -87,6 +86,11 @@ urlFromString :: String -> URL
 urlFromString ""      = []
 urlFromString ('/':s) = urlFromString s
 urlFromString s       = map pathCompFromString $ splitDirectories $ normalise s
+
+-- exported
+urlFromStrings :: [String] -> URL
+urlFromStrings []     = []
+urlFromStrings ss     = filter (/= "") $ map pathCompFromString ss
 
 -- exported
 urlToFilePath :: URL -> FilePath
@@ -192,10 +196,9 @@ overwriteNode node = do deleteNode node
                         writeNode node
 
 -- exported
-getParentNode :: Node -> RepositoryContext Node
-getParentNode node | node_name node == "/" = left $ userError "Root has no parent"
-getParentNode node | otherwise = do let path     = init $ node_path node
-                                    getNode (node_repo node) path
+getParentNode :: Node -> RepositoryContext (Maybe Node)
+getParentNode node | node_name node == "/" = return Nothing
+getParentNode node | otherwise = liftM Just $ getNode (node_repo node) (init $ node_path node)
 
 -- exported
 getChildNodeNames :: Node -> RepositoryContext [String]
@@ -232,21 +235,30 @@ getChildNodesRecursively node = do
 
 --exported
 getSiblingNames :: Node -> RepositoryContext [String]
-getSiblingNames node = do parent <- getParentNode node
-                          let path = urlToFilePath $ node_path $ parent
-                              repo = node_repo parent
-                              filePath = root repo </> path
-                          dirEntries <- check $ getDirectoryContents filePath
-                          let acceptable = (`notElem` [".", "..", node_name node])
-                              isNodeDir d = do let dir = filePath </> d
-                                               exists <- doesDirectoryExist dir
-                                               let isNode = ".n" `isSuffixOf` dir
-                                               return (exists && isNode)
-                          nodeDirs <- check $ filterM isNodeDir $ filter acceptable dirEntries
-                          return $ map pathCompFromFilePath nodeDirs
+getSiblingNames node = do mparent <- getParentNode node
+                          case mparent of
+                            Nothing -> return []
+                            Just parent -> do
+                              let path = urlToFilePath $ node_path $ parent
+                                  repo = node_repo parent
+                                  filePath = root repo </> path
+                              dirEntries <- check $ getDirectoryContents filePath
+                              let acceptable = (`notElem` [".", "..", node_name node])
+                                  isNodeDir d = do let dir = filePath </> d
+                                                   exists <- doesDirectoryExist dir
+                                                   let isNode = ".n" `isSuffixOf` dir
+                                                   return (exists && isNode)
+                              nodeDirs <- check $ filterM isNodeDir $ filter acceptable dirEntries
+                              return $ map pathCompFromFilePath nodeDirs
 --exported
 getSiblings :: Node -> RepositoryContext [Node]
-getSiblings node = getSiblingNames node >>= mapM (getChildNode node)
+getSiblings node = do
+  mparent <- getParentNode node
+  case mparent of
+    Nothing -> return []
+    Just parent -> do
+      siblingNames <- getSiblingNames node
+      mapM (getChildNode parent) siblingNames
 
 --exported
 isRootNode :: Node -> Bool
