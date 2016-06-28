@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery ( Gallery(gallery_name, gallery_images)
                                                        , Image(image_name, image_type, image_uploadedBy, image_uploadedDate)
                                                        , list_galleries
@@ -67,7 +69,7 @@ instance Persistent Gallery where
   readItem repo gname = do
     gnode   <- getNode repo $ urlFromString gname
     inames  <- getChildNodeNames gnode
-    sortKey <- liftM UL8.toString $ getProperty gnode "sortKey"
+    sortKey <- liftM UL8.toString $ getPropertyWithDefault gnode "sortKey" ""
     return $ Gallery repo gname (sort inames) sortKey
 
   deleteItem g = deleteNode $ toNode g

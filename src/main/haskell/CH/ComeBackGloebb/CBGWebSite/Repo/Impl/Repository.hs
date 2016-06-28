@@ -16,6 +16,7 @@ module CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
     , getSiblings
     , Property (..)
     , getProperty
+    , getPropertyWithDefault
     , hasProperty
     , getPropertyPath
     , writeProperty
@@ -38,6 +39,7 @@ where
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
 import           Control.Monad                                (filterM, liftM)
 import           Control.Monad.Trans.Either                   (EitherT, left)
+import           Control.Monad.Trans.Either                   (runEitherT)
 import qualified Data.ByteString.Lazy                         as BL
 import           Data.List                                    (intercalate,
                                                                isSuffixOf)
@@ -144,6 +146,11 @@ readPropertyNames path = readFiles           >>=
 -- exported
 getProperty :: Node -> String -> RepositoryContext BL.ByteString
 getProperty node pname = check $ BL.readFile $ getPropertyPath node pname
+
+-- exported
+getPropertyWithDefault :: Node -> String -> BL.ByteString -> RepositoryContext BL.ByteString
+getPropertyWithDefault node pname def = do eProp <- check $ runEitherT $ getProperty node pname
+                                           return $ either (const def) id eProp
 
 -- exported
 hasProperty :: Node -> String -> RepositoryContext Bool
