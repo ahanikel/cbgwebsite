@@ -456,8 +456,6 @@ navigationWidget maybeAuthId' path = do
                                              <ul .menu>
                                                <li .collapsed>
                                                  <a href=@{MembersR} title="Mitglieder">Mitglieder
-                                               <li .collapsed>
-                                                 <a href=@{GalleriesR} title=Fotoalben>Fotoalben
                                    |]
                                ("members" : _) ->
                                    [whamlet|
