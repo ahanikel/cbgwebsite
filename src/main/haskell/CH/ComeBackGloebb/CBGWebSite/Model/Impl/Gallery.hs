@@ -177,7 +177,7 @@ image_read repo gname iname = do
 getImagePropertyPath :: Image -> String -> FilePath
 getImagePropertyPath i p =
   let inode     = toNode i
-  in getPropertyPath inode image_blob_name
+  in getPropertyPath inode p
 
 --exported: shamelessly changing type signature, we haven't released yet
 image_blob :: Image -> FilePath
