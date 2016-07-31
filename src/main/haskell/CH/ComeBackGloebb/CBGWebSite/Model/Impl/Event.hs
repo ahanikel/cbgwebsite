@@ -36,13 +36,14 @@ instance Persistent Event where
     writeProperty n "location"    $ UL8.fromString $ T.unpack               evLocation
 
   readItem repo path = do
-    node            <- getNode repo (urlFromString path)
-    let textProperty = liftM (T.pack . UL8.toString) . getProperty node
-        dateProperty = liftM (fromSqlString . UL8.toString) . getProperty node
+    node                           <- getNode repo (urlFromString path)
+    let dateProperty                = liftM (fromSqlString . UL8.toString) . getProperty node
+        datePropertyWithDefault def = liftM (fromSqlString . UL8.toString) . getPropertyWithDefault node def
+        textPropertyWithDefault def = liftM (T.pack . UL8.toString) . getPropertyWithDefault node def
     startDate       <- dateProperty "startDate"
-    endDate         <- dateProperty "endDate"
-    description     <- textProperty "description"
-    location        <- textProperty "location"
+    endDate         <- datePropertyWithDefault "endDate" (UL8.fromString $ show startDate)
+    description     <- textPropertyWithDefault "description" (UL8.fromString "")
+    location        <- textPropertyWithDefault "location" (UL8.fromString "")
     return $ Event repo
                    (T.pack $ node_name node)
                    (fromMaybe startOfTime startDate)

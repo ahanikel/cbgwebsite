@@ -15,6 +15,7 @@ module CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite where
 
 -- CBG
 import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Asset
+import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Calendar
 import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Event
 import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery
 import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Member
@@ -48,10 +49,13 @@ import           Data.Conduit
 import qualified Data.Conduit.Binary                                as CB
 import           Data.DateTime
 import           Data.Foldable                                      (foldrM)
+import           Data.Function                                      (on)
 import           Data.List                                          (deleteBy,
                                                                      elemIndex,
                                                                      intercalate,
-                                                                     sort)
+                                                                     partition,
+                                                                     sort,
+                                                                     sortBy)
 import           Data.Maybe                                         (fromMaybe)
 import           Data.Text                                          (Text)
 import qualified Data.Text                                          as T
@@ -91,27 +95,27 @@ data CBGWebSite = CBGWebSite { getStatic    :: Static
                              }
 
 mkYesod "CBGWebSite" [parseRoutes|
-    /                                RootR                 GET
-    /favicon.ico                     FavR                  GET
-    /static                          StaticR               Static          getStatic
-    /auth                            AuthR                 Auth            getAuth
-    /members                         MembersR              GET
-    /content/+ContentPath            ContentR              GET
-    /edit/content/+ContentPath       EditContentR          GET POST
-    /members/calendar                MemberCalendarR       GET
-    /members/calendar/#Int/#Int      MemberCalendarMR      GET
-    /members/event/edit/#Text        EventR                GET POST
-    /members/list                    MemberListR           GET
-    /members/list/edit/#Text         MemberR               GET POST
-    /galleries                       GalleriesR            GET
-    /gallery/#Text                   GalleryR              GET POST DELETE
-    /gallery/#Text/images            GalleryImagesR        GET
-    /gallery/#Text/image/#Text       GalleryImageR         GET POST DELETE
-    /image/orig/#Text/#Text          ImageR                GET
-    /image/small/#Text/#Text         ImageSmallR           GET
-    /image/thumb/#Text/#Text         ImageThumbR           GET
-    /upload/image/#Text              UploadImageR          POST
-    /asset/+ContentPath              AssetR                GET
+    /                                 RootR                 GET
+    /favicon.ico                      FavR                  GET
+    /static                           StaticR               Static          getStatic
+    /auth                             AuthR                 Auth            getAuth
+    /members                          MembersR              GET
+    /content/+ContentPath             ContentR              GET
+    /edit/content/+ContentPath        EditContentR          GET POST
+    /members/calendar                 MemberCalendarR       GET
+    /members/calendar/month/#Int/#Int MemberCalendarMR      GET
+    /members/event/edit/#Text         EventR                GET POST
+    /members/list                     MemberListR           GET
+    /members/list/edit/#Text          MemberR               GET POST
+    /galleries                        GalleriesR            GET
+    /gallery/#Text                    GalleryR              GET POST DELETE
+    /gallery/#Text/images             GalleryImagesR        GET
+    /gallery/#Text/image/#Text        GalleryImageR         GET POST DELETE
+    /image/orig/#Text/#Text           ImageR                GET
+    /image/small/#Text/#Text          ImageSmallR           GET
+    /image/thumb/#Text/#Text          ImageThumbR           GET
+    /upload/image/#Text               UploadImageR          POST
+    /asset/+ContentPath               AssetR                GET
 |]
 
 instance Yesod CBGWebSite where
@@ -638,27 +642,27 @@ getMemberCalendarMR :: Int -> Int -> Handler TypedContent
 getMemberCalendarMR year month = if   month < 1 || month > 12
                                  then notFound
                                  else selectRep $ do
-    provideRep $ renderEvents $ \events -> cbgLayout ["members", "calendar"]
-        [whamlet|
-            <table>
-                <tr>
-                    <th>Startdatum
-                    <th>Enddatum
-                    <th>Titel
-                    <th>Ort
-                    <th>Beschreibung
-                $forall event <- events
-                    <tr>
-                        <td>#{               toSqlString  $  evStartDate   event}
-                        <td>#{fromMaybe "" $ toSqlString <$> evEndDate     event}
-                        <td>#{                               evTitle       event}
-                        <td>#{                               evLocation    event}
-                        <td>#{                               evDescription event}
-                        <td>
-                            <a href=@{EventR $ eventId event}>
-                                <button>Edit
-        |]
+
+    provideRep $ do events              <- sortBy (compare `on` evStartDate) <$> getEvents
+                    let cal              = calendarForMonth year month         :: [[DateTime]]
+                        calWithoutEvents = map (map (\d -> (d, []))) cal       :: [[(DateTime, [Event])]]
+                        -- mapping with the full list of events is not very efficient, it would be
+                        -- better to remove the events from the list that have already been considered
+                        calWithEvents = map (mergeCal events) calWithoutEvents :: [[(DateTime, [Event])]]
+                    cbgLayout ["members", "calendar"]
+                        [whamlet|
+                            <div>
+                                $forall week <- calWithEvents
+                                    <dl>
+                                        $forall day <- week
+                                            <dt>#{dayno $ fst day}
+                                            <dd>
+                                                $forall event <- snd day
+                                                    <p>#{evTitle event}
+                        |]
+
     provideRep $ renderEvents returnJson
+
   where renderEvents :: HasContentType a => ([Event] -> Handler a) -> Handler a
         renderEvents as = do
               app          <- getYesod
@@ -668,8 +672,26 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
                                      as ([] :: [Event])
                   Right events -> as events
 
+        getEvents :: Handler [Event]
+        getEvents = do
+              app          <- getYesod
+              eitherEvents <- liftIO $ runEitherT $ getEventsForMonth (calendarRepo app) year month
+              case eitherEvents of
+                  Left  e      -> do $logError $ T.pack $ show e
+                                     return ([] :: [Event])
+                  Right events -> return events
+
         eventId event = T.pack $ intercalate "/" [show year', show month', toSqlString $ evStartDate event, T.unpack $ evTitle event]
             where (year', month', _) = toGregorian' $ evStartDate event
+
+        dayno :: DateTime -> Int
+        dayno d = let (_, _, dno) = toGregorian' d in dno
+
+        mergeCal :: [Event] -> [(DateTime, [Event])] -> [(DateTime, [Event])]
+        mergeCal _ [] = []
+        mergeCal events ((cal, _) : calRest) = (cal, eventsAt) : mergeCal eventsAfter calRest
+          where
+            (eventsAt, eventsAfter) = partition (\ev -> toGregorian' cal == toGregorian' (evStartDate ev)) events
 
 eventForm :: CBGWebSite -> Maybe Event -> Html -> MForm Handler (FormResult Event, Widget)
 eventForm app mevent = do

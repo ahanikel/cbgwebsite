@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Calendar () where
+module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Calendar (calendarForMonth) where
 
 import           Data.DateTime (DateTime, addSeconds, formatDateTime,
                                 fromGregorian', fromSeconds, toSeconds)
