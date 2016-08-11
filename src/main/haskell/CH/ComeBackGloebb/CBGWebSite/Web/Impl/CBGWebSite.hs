@@ -297,20 +297,6 @@ ckEditor widget = do
         <script src=//cdn.ckeditor.com/4.5.7/standard/ckeditor.js>
     |]
 
-withBootstrap :: Widget -> Widget
-withBootstrap widget = do
-    withJQuery widget
-    toWidgetHead [hamlet|
-        <!-- Latest compiled and minified CSS -->
-        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
-
-        <!-- Optional theme -->
-        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
-
-        <!-- Latest compiled and minified JavaScript -->
-        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous">
-    |]
-
 editPage :: Widget -> Widget
 editPage contentBody = [whamlet|
     <div #buttons>
@@ -358,7 +344,7 @@ editPage contentBody = [whamlet|
     |]
 
 editLayout :: [Text] -> Widget -> Handler Html
-editLayout path = cbgLayout ("edit" : path) . withBootstrap . editPage
+editLayout path = cbgLayout ("edit" : path) . editPage
 
 getRootR :: Handler ()
 getRootR = redirect ("/content" :: String)

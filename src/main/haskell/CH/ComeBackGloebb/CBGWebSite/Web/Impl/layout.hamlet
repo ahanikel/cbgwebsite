@@ -3,27 +3,30 @@ $doctype 5
     <head>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
         <title>#{pageTitle pageContent}
-        <link type=text/css rel=stylesheet media=screen href=@{StaticR defaults_css}>
-        <link type=text/css rel=stylesheet media=screen href=@{StaticR garland_css}>
-        <link type=text/css rel=stylesheet media=screen href=@{StaticR cbg_css}>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+        <script src=//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous">
+       <link type=text/css rel=stylesheet media=screen href=@{StaticR garland_css}>
+       <link type=text/css rel=stylesheet media=screen href=@{StaticR cbg_css}>
         ^{pageHead pageContent}
     <body .sidebar-left>
         <div #header-region .clear-block>
         <div #wrapper>
-            <div #container .clear-block>
-                <div #header>
-                    <div #logo-floater>
+            <div #container .row .clear-block>
+                <div #header .col-lg-12>
+                    <div #logo-floater .col-lg-4>
                         <h1>
                             <a href=@{RootR}>
-                                <img #logo src=@{StaticR garland_logo_png} alt="">
-                    <ul .links .primary-links>
+                                <img #logo .img-responsive src=@{StaticR garland_logo_png} alt="">
+                    <ul .col-lg-8 .links .primary-links>
                         ^{pageBody trail}
                         $maybe userid <- maybeAuthId'
                             <li .menu-170 .last>
                                 <a href=@{AuthR LogoutR} title="Logout">Logout #{userid}
-                <div #sidebar-left .sidebar>
+                <div #sidebar-left .col-lg-4 .sidebar>
                     ^{pageBody navi}
-                <div #center>
+                <div #center .col-lg-8>
                     <div #squeeze>
                         <div .right-corner>
                             <div .left-corner>
