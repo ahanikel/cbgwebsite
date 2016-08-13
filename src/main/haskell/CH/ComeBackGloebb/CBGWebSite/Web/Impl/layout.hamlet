@@ -14,19 +14,19 @@ $doctype 5
         <div #header-region .clear-block>
         <div #wrapper>
             <div #container .row .clear-block>
-                <div #header .col-lg-12>
-                    <div #logo-floater .col-lg-4>
+                <div #header>
+                    <div #logo-floater>
                         <h1>
                             <a href=@{RootR}>
                                 <img #logo .img-responsive src=@{StaticR garland_logo_png} alt="">
-                    <ul .col-lg-8 .links .primary-links>
+                    <ul .links .primary-links>
                         ^{pageBody trail}
                         $maybe userid <- maybeAuthId'
                             <li .menu-170 .last>
                                 <a href=@{AuthR LogoutR} title="Logout">Logout #{userid}
-                <div #sidebar-left .col-lg-4 .sidebar>
+                <div #sidebar-left .sidebar>
                     ^{pageBody navi}
-                <div #center .col-lg-8>
+                <div #center>
                     <div #squeeze>
                         <div .right-corner>
                             <div .left-corner>

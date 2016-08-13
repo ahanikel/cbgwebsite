@@ -29,7 +29,8 @@ import           Network.HTTP.Conduit                               (Manager)
 import           Text.Hamlet
 import           Yesod                                              hiding
                                                                      (deleteBy,
-                                                                     joinPath)
+                                                                     joinPath,
+                                                                     renderBootstrap)
 import           Yesod.Auth
 import           Yesod.Auth.Account
 import           Yesod.Auth.GoogleEmail2
@@ -637,14 +638,17 @@ getMemberCalendarMR year month = if   month < 1 || month > 12
                         calWithEvents = map (mergeCal events) calWithoutEvents :: [[(DateTime, [Event])]]
                     cbgLayout ["members", "calendar"]
                         [whamlet|
-                            <div>
-                                $forall week <- calWithEvents
-                                    <dl>
-                                        $forall day <- week
-                                            <dt>#{dayno $ fst day}
-                                            <dd>
-                                                $forall event <- snd day
-                                                    <p>#{evTitle event}
+                            <div .container>
+                                <div .row>
+                                    <div .col-md-8 .col-md-offset-1>
+                                        <div #calendar .container>
+                                            $forall week <- calWithEvents
+                                                <div .row>
+                                                    $forall day <- week
+                                                        <div .col-md-1>
+                                                            <div .thumbnail>#{dayno $ fst day}
+                                                                $forall event <- snd day
+                                                                    <p>#{evTitle event}
                         |]
 
     provideRep $ renderEvents returnJson
@@ -731,18 +735,34 @@ postEventR name = do
 --- Member List
 ------------------------------------------------------------------------------------------
 
+renderBootstrap aform fragment = do
+    (res, views') <- aFormToForm aform
+    let views = views' []
+        has (Just _) = True
+        has Nothing  = False
+        widget = [whamlet|
+                        \#{fragment}
+                        $forall view <- views
+                            <div .form-group :fvRequired view:.required :not $ fvRequired view:.optional :has $ fvErrors view:.error>
+                                <label .col-md-2 .control-label for=#{fvId view}>#{fvLabel view}
+                                <div .col-md-10>
+                                    ^{fvInput view}
+                 |]
+    return (res, widget)
+
 memberForm :: CBGWebSite -> Maybe Member -> Html -> MForm Handler (FormResult Member, Widget)
 memberForm app mmember = do
   let repo = memberRepo app
-  renderDivs $ Member repo
-    <$> areq textField "Vorname" (memFirstname <$> mmember)
-    <*> areq textField "Name"    (memName      <$> mmember)
-    <*> areq textField "Strasse" (memAddress   <$> mmember)
-    <*> areq textField "Ort"     (memLocality  <$> mmember)
-    <*> areq textField "Status"  (memStatus    <$> mmember)
-    <*> areq textField "Telefon" (memPhone     <$> mmember)
-    <*> areq textField "Mobile"  (memMobile    <$> mmember)
-    <*> areq textField "E-Mail"  (memEmail     <$> mmember)
+  renderBootstrap $ Member repo
+    <$> areq textField (fieldDef "Vorname") (memFirstname <$> mmember)
+    <*> areq textField (fieldDef "Name")    (memName      <$> mmember)
+    <*> areq textField (fieldDef "Strasse") (memAddress   <$> mmember)
+    <*> areq textField (fieldDef "Ort")     (memLocality  <$> mmember)
+    <*> areq textField (fieldDef "Status")  (memStatus    <$> mmember)
+    <*> areq textField (fieldDef "Telefon") (memPhone     <$> mmember)
+    <*> areq textField (fieldDef "Mobile")  (memMobile    <$> mmember)
+    <*> areq textField (fieldDef "E-Mail")  (memEmail     <$> mmember)
+  where fieldDef name = name { fsAttrs = [("class", "form-control")] }
 
 getMemberR :: Text -> Handler Html
 getMemberR name = do app          <- getYesod
@@ -752,9 +772,10 @@ getMemberR name = do app          <- getYesod
                                             eitherMember
                      (widget, encType) <- generateFormPost $ memberForm app mmember
                      cbgLayout ["members", "list", "edit"] [whamlet|
-                        <form method=post action=@{MemberR name} enctype=#{encType}>
-                            ^{widget}
-                            <button>Submit
+                             <form .form-horizontal method=post action=@{MemberR name} enctype=#{encType}>
+                                 ^{widget}
+                                 <div .form-group>
+                                     <button>Submit
                      |]
 
 postMemberR :: Text -> Handler Html
@@ -918,23 +939,24 @@ getGalleryImageR gname iname = selectRep $
                                  else take 1 $ drop (imgno - 1) images
                     imgnext    = take 1 $ drop (imgno + 1) images
                 cbgLayout ["gallery", gname, iname] [whamlet|
-                    <h1>#{gname} - #{iname}
-                    <table>
-                        <tr>
-                            <th>
-                                $case imgprev
-                                    $of [prev]
-                                        <a href=@{GalleryImageR gname (T.pack prev)}>&lt;- Vorheriges
-                                    $of _
-                                |
-                                $case imgnext
-                                    $of [next]
-                                        <a href=@{GalleryImageR gname (T.pack next)}>Nächstes -&gt;
-                                    $of _
-                        <tr>
-                            <td>
-                                <a href=@{ImageR gname iname}>
-                                    <img src=@{ImageSmallR gname iname}>
+                        <div .row>
+                            <h1>#{gname} - #{iname}
+                        <div .row>
+                                    $case imgprev
+                                        $of [prev]
+                                            <a .col-md-1 href=@{GalleryImageR gname (T.pack prev)}>
+                                                <button .btn .btn-primary>&lt;- Vorheriges
+                                        $of _
+                                            <div .col-md-1>&nbsp;
+                                    |
+                                    $case imgnext
+                                        $of [next]
+                                            <a .col-md-1 .col-md-offset-9 href=@{GalleryImageR gname (T.pack next)}>
+                                                <button .btn .btn-primary>Nächstes -&gt;
+                                        $of _
+                        <div .row style="margin-top: 20px;">
+                                    <a href=@{ImageR gname iname}>
+                                        <img .galleryimg-small src=@{ImageSmallR gname iname}>
                 |]
 
 
