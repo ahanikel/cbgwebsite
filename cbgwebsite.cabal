@@ -11,51 +11,85 @@ Build-Type:     Simple
 Description:    The Come Back Glöbb Web Site
 
 Executable CBGWebSite
-  Main-Is: CH/ComeBackGloebb/CBGWebSite/Web/Main/Main.hs
+  Main-Is: Main.hs
+  Hs-Source-Dirs: src/app/haskell
   Default-Language: Haskell2010
   Build-Depends: base
                , bytestring
-               , conduit
-               , conduit-extra
-               , directory
-               , text
-               , yesod
-               , yesod-auth
-               , yesod-auth-account
-               , yesod-static
-               , wai
-               , shakespeare
+               , cbgwebsite
                , http-conduit
-               , pandoc
-               , filepath
                , http-types
-               , aeson
+               , monad-logger
                , mtl
-               , either
-               , vector
-               , process
-               , datetime
-               , uuid
-               , transformers
-               , MissingH
-               , utf8-string
-               , warp
-               , warp-tls
                , persistent
                , persistent-sqlite
                , persistent-template
-               , monad-logger
-               , mime-mail
-               , containers
-  Hs-Source-Dirs: src/main/haskell
+               , text
+               , wai
+               , warp
+               , warp-tls
+               , yesod
+               , yesod-static
 
-test-suite test
+Library
+  Hs-Source-Dirs: src/main/haskell
+  Default-Language: Haskell2010
+  Exposed-Modules: CH.ComeBackGloebb.CBGWebSite.Model.Impl.Asset
+                 , CH.ComeBackGloebb.CBGWebSite.Model.Impl.Calendar
+                 , CH.ComeBackGloebb.CBGWebSite.Model.Impl.Event
+                 , CH.ComeBackGloebb.CBGWebSite.Model.Impl.Gallery
+                 , CH.ComeBackGloebb.CBGWebSite.Model.Impl.Member
+                 , CH.ComeBackGloebb.CBGWebSite.Model.Impl.Navigation
+                 , CH.ComeBackGloebb.CBGWebSite.Repo.Class
+                 , CH.ComeBackGloebb.CBGWebSite.Repo.Repository
+                 , CH.ComeBackGloebb.CBGWebSite.Repo.Types
+                 , CH.ComeBackGloebb.CBGWebSite.Repo.Impl.FileStorage
+                 , CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
+                 , CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
+  Build-Depends: base
+               , MissingH
+               , aeson
+               , bytestring
+               , conduit
+               , conduit-extra
+               , containers
+               , datetime
+               , directory
+               , either
+               , filepath
+               , http-conduit
+               , http-types
+               , mime-mail
+               , mtl
+               , pandoc
+               , persistent-sqlite
+               , process
+               , shakespeare
+               , text
+               , transformers
+               , utf8-string
+               , uuid
+               , vector
+               , wai
+               , yesod
+               , yesod-auth
+               , yesod-auth-account-cbg
+               , yesod-static
+
+test-suite CBGWebSite-test
   Default-Language: Haskell2010
   Hs-Source-Dirs: src/test/haskell
-  Main-Is: main.hs
+  Main-Is: CH/ComeBackGloebb/CBGWebSite/Model/Asset.hs
   Type: exitcode-stdio-1.0
   Build-Depends: base
                , cbgwebsite
+               , directory
+               , either
+               , hspec
+               , temporary
   ghc-options: -O2
 
 source-repository head

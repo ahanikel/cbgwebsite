@@ -54,6 +54,7 @@ import           Data.Function                                      (on)
 import           Data.List                                          (deleteBy,
                                                                      elemIndex,
                                                                      intercalate,
+                                                                     isPrefixOf,
                                                                      partition,
                                                                      sort,
                                                                      sortBy)
@@ -67,6 +68,7 @@ import           Database.Persist.Sqlite                            (ConnectionP
                                                                      runSqlPool)
 import           Debug.Trace
 import           Network.Mail.Mime
+import           System.FilePath                                    ((</>))
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistUpperCase|
 User
@@ -89,7 +91,7 @@ data CBGWebSite = CBGWebSite { getStatic    :: Static
                              , memberRepo   :: Repository
                              , calendarRepo :: Repository
                              , galleryRepo  :: Repository
-                             , assetRepo    :: Repository
+                             , assetRepo'   :: Repository
                              , clientId     :: Text
                              , clientSecret :: Text
                              , dbPool       :: ConnectionPool
@@ -116,7 +118,8 @@ mkYesod "CBGWebSite" [parseRoutes|
     /image/small/#Text/#Text          ImageSmallR           GET
     /image/thumb/#Text/#Text          ImageThumbR           GET
     /upload/image/#Text               UploadImageR          POST
-    /asset/+ContentPath               AssetR                GET
+    /assets/+ContentPath              AssetsR               GET
+    /asset/+ContentPath               AssetR                GET POST
 |]
 
 instance Yesod CBGWebSite where
@@ -184,6 +187,7 @@ instance Yesod CBGWebSite where
 
     -- the assets
     isAuthorized (AssetR _)             False = isAuthorized MembersR False
+    isAuthorized (AssetsR _)            False = isAuthorized MembersR False
 
     -- everything else
     isAuthorized _                      _     = return $ Unauthorized ""
@@ -1027,7 +1031,7 @@ postUploadImageR gname = do
 
 getAssetR :: ContentPath -> Handler ()
 getAssetR (ContentPath path) = do
-  repo <- liftM assetRepo getYesod
+  repo <- liftM assetRepo' getYesod
   let filePath = intercalate "/" $ map T.unpack path
   eitherAsset <- liftIO $ runEitherT $ assetRead repo filePath
   case eitherAsset of
@@ -1035,3 +1039,45 @@ getAssetR (ContentPath path) = do
       $logError $ T.pack $ show e
       notFound
     Right asset -> sendFile (U8.fromString $ assetType asset) $ trace (show $ assetBlob asset) (assetBlob asset)
+
+postAssetR :: ContentPath -> Handler ()
+postAssetR (ContentPath path) = do
+  (_, files) <- runRequestBody
+  mauthUser  <- maybeAuthId
+  case mauthUser of
+    Nothing -> permissionDenied ""
+    Just userName -> do
+      let upload (_, file) = do
+           app          <- getYesod
+           let name      = fileName file
+               type'     = fileContentType file
+           bytes        <- runConduit $ fileSource file $$ CB.sinkLbs
+           eitherResult <- liftIO $ runEitherT $ do
+             now <- liftIO getCurrentTime
+             assetWrite (assetRepo' app) (map T.unpack path) (T.unpack name) (T.unpack type') (T.unpack userName) now bytes
+           case eitherResult of
+             Left e -> do
+               $logError $ T.pack $ show e
+               fail "Internal error while trying to save asset."
+             Right _ -> return ()
+      mapM_ upload files
+
+
+getAssetsR :: ContentPath -> Handler Html
+getAssetsR (ContentPath path) = do
+  app <- getYesod
+  assets' <- liftIO $ runEitherT $ listAssets (assetRepo' app) (map T.unpack path)
+  case assets' of
+    Left e -> do
+      $logError $ T.pack $ show e
+      fail "Internal error while trying to load asset."
+    Right assets -> cbgLayout path [whamlet|
+      <div .assets .row>
+      $forall asset <- assets
+        <div .asset .col-md-1>
+          <a href=@{AssetsR $ ContentPath $ map T.pack (assetPath asset)} .thumbnail>
+            $if isPrefixOf "image/" $ assetType asset
+              <img src=#{assetBlob asset}>
+            $else
+              <span .glyphicon .glyphicon-folder-open>
+    |]
