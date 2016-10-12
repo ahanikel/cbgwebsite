@@ -47,7 +47,7 @@ instance Persistent Asset where
     node         <- getNode repo $ urlFromString path
     type'        <- liftM UL8.toString $ getPropertyWithDefault node "type" "application/x-directory"
     uploadedBy   <- liftM UL8.toString $ getPropertyWithDefault node "uploadedBy" "nobody"
-    uploadedDate <- liftM UL8.toString $ getPropertyWithDefault node "uploadedDate" "1970-01-01T00:00"
+    uploadedDate <- liftM UL8.toString $ getPropertyWithDefault node "uploadedDate" "1970-01-01T00:00:00"
     return $ Asset (node_repo node)
                    (node_path node)
                    (node_name node)
@@ -75,7 +75,7 @@ assetWrite repo path name type' uploadedBy uploadedDate blob = do
   let asset = Asset repo path name type' uploadedBy uploadedDate
       node  = toNode asset
   writeItem asset
-  writeProperty node (assetBlob asset) blob
+  writeProperty node "asset.blob" blob
 
 -- exported
 listAssets :: Repository -> [String] -> RepositoryContext [Asset]

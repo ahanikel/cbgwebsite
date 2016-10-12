@@ -119,7 +119,7 @@ mkYesod "CBGWebSite" [parseRoutes|
     /image/thumb/#Text/#Text          ImageThumbR           GET
     /upload/image/#Text               UploadImageR          POST
     /assets/+ContentPath              AssetsR               GET
-    /asset/+ContentPath               AssetR                GET POST
+    /asset/+ContentPath               AssetR                GET POST PUT
 |]
 
 instance Yesod CBGWebSite where
@@ -188,6 +188,7 @@ instance Yesod CBGWebSite where
     -- the assets
     isAuthorized (AssetR _)             False = isAuthorized MembersR False
     isAuthorized (AssetsR _)            False = isAuthorized MembersR False
+    isAuthorized (AssetR _)             True  = isAuthorized MembersR False
 
     -- everything else
     isAuthorized _                      _     = return $ Unauthorized ""
@@ -1062,6 +1063,22 @@ postAssetR (ContentPath path) = do
              Right _ -> return ()
       mapM_ upload files
 
+putAssetR :: ContentPath -> Handler ()
+putAssetR (ContentPath path) = do
+  mauthUser <- maybeAuthId
+  app   <- getYesod
+  let name = last path
+      type' = "unknown" -- TODO: extract content type header
+      userName = fromMaybe "anonymous" mauthUser
+  bytes <- runConduit $ rawRequestBody $$ CB.sinkLbs
+  eitherResult <- liftIO $ runEitherT $ do
+    now <- liftIO getCurrentTime
+    assetWrite (assetRepo' app) (map T.unpack path) (T.unpack name) (T.unpack type') (T.unpack userName) now bytes
+  case eitherResult of
+    Left e -> do
+      $logError $ T.pack $ show e
+      fail "Internal error while trying to save asset."
+    Right _ -> return ()
 
 getAssetsR :: ContentPath -> Handler Html
 getAssetsR (ContentPath path) = do
