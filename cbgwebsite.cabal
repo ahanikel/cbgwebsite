@@ -82,7 +82,7 @@ Library
 test-suite CBGWebSite-test
   Default-Language: Haskell2010
   Hs-Source-Dirs: src/test/haskell
-  Main-Is: CH/ComeBackGloebb/CBGWebSite/Model/Asset.hs
+  Main-Is: Main.hs
   Type: exitcode-stdio-1.0
   Build-Depends: base
                , cbgwebsite
@@ -91,6 +91,8 @@ test-suite CBGWebSite-test
                , hspec
                , temporary
   ghc-options: -O2
+  Other-Modules: Test.Repo.Repository
+               , Test.Model.Asset
 
 source-repository head
   type:     git
