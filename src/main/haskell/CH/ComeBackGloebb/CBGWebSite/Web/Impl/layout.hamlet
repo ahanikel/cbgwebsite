@@ -9,7 +9,7 @@ $doctype 5
         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous">
        <link type=text/css rel=stylesheet media=screen href=@{StaticR garland_css}>
        <link type=text/css rel=stylesheet media=screen href=@{StaticR cbg_css}>
-        ^{pageHead pageContent}
+       ^{pageHead pageContent}
     <body .sidebar-left>
         <div #header-region .clear-block>
         <div #wrapper>

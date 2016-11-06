@@ -119,7 +119,7 @@ mkYesod "CBGWebSite" [parseRoutes|
     /image/thumb/#Text/#Text          ImageThumbR           GET
     /upload/image/#Text               UploadImageR          POST
     /assets/+ContentPath              AssetsR               GET
-    /asset/+ContentPath               AssetR                GET POST PUT
+    /asset/+ContentPath               AssetR                GET POST PUT DELETE
 |]
 
 instance Yesod CBGWebSite where
@@ -186,9 +186,8 @@ instance Yesod CBGWebSite where
     isAuthorized (UploadImageR _)       True  = isAuthorized MembersR False
 
     -- the assets
-    isAuthorized (AssetR _)             False = isAuthorized MembersR False
+    isAuthorized (AssetR _)             _     = isAuthorized MembersR False
     isAuthorized (AssetsR _)            False = isAuthorized MembersR False
-    isAuthorized (AssetR _)             True  = isAuthorized MembersR False
 
     -- everything else
     isAuthorized _                      _     = return $ Unauthorized ""
@@ -466,6 +465,8 @@ navigationWidget maybeAuthId' path = do
                                                        <li .leaf>
                                                            <a href=@{MemberListR} title=Mitgliederliste>Mitgliederliste
                                                        <li .leaf>
+                                                           <a href=@{AssetsR $ ContentPath []} title=Dateien>Dateien
+                                                       <li .leaf>
                                                            <a href=@{AssetR $ ContentPath ["Verein", "Statuten", "Statuten.pdf"]} title=Statuten>Statuten
                                                        <li .collapsed>
                                                            <a href=@{GalleriesR} title=Fotoalben>Fotoalben
@@ -495,6 +496,27 @@ navigationWidget maybeAuthId' path = do
                                                            <a href=@{GalleriesR} title=Fotoalben>Fotoalben
                                                            <ul .menu>
                                                                ^{galleryNavigation path}
+                                   |]
+                               ("assets" : _) ->
+                                   [whamlet|
+                                             <ul .menu>
+                                               <li .collapsed>
+                                                   <a href=@{RootR} title=Willkommen>Willkommen
+                                               <li .expanded>
+                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
+                                                   <ul .menu>
+                                                       <li .leaf>
+                                                           <a href=@{MemberCalendarR} title=Kalender>Kalender
+                                                       <li .leaf>
+                                                           <a href=@{MemberListR} title=Mitgliederliste>Mitgliederliste
+                                                       <li .expanded>
+                                                           <a href=@{AssetsR $ ContentPath []} title=Dateien>Dateien
+                                                           <ul .menu>
+                                                               <li .leaf>&rarr;
+                                                       <li .leaf>
+                                                           <a href=@{AssetR $ ContentPath ["Verein", "Statuten", "Statuten.pdf"]} title=Statuten>Statuten
+                                                       <li .collapsed>
+                                                           <a href=@{GalleriesR} title=Fotoalben>Fotoalben
                                    |]
                                _ ->
                                    [whamlet|
@@ -1043,58 +1065,177 @@ getAssetR (ContentPath path) = do
 
 postAssetR :: ContentPath -> Handler ()
 postAssetR (ContentPath path) = do
-  (_, files) <- runRequestBody
+  (params, files) <- runRequestBody
   mauthUser  <- maybeAuthId
   case mauthUser of
     Nothing -> permissionDenied ""
     Just userName -> do
-      let upload (_, file) = do
+      let upload (f, file) = do
            app          <- getYesod
-           let name      = fileName file
+           let name      = fromMaybe "noName" $ lookup "fileName" params
                type'     = fileContentType file
            bytes        <- runConduit $ fileSource file $$ CB.sinkLbs
            eitherResult <- liftIO $ runEitherT $ do
              now <- liftIO getCurrentTime
-             assetWrite (assetRepo' app) (map T.unpack path) (T.unpack name) (T.unpack type') (T.unpack userName) now bytes
+             assetWrite (assetRepo' app) (map T.unpack (path ++ [name])) (T.unpack name) (T.unpack type') (T.unpack userName) now (Just bytes)
            case eitherResult of
              Left e -> do
                $logError $ T.pack $ show e
                fail "Internal error while trying to save asset."
              Right _ -> return ()
       mapM_ upload files
+      redirect $ AssetsR $ ContentPath path
 
 putAssetR :: ContentPath -> Handler ()
 putAssetR (ContentPath path) = do
   mauthUser <- maybeAuthId
   app   <- getYesod
   let name = last path
-      type' = "unknown" -- TODO: extract content type header
+      path' = init path
+      repo = assetRepo' app
+      type' = "application/x-directory"
       userName = fromMaybe "anonymous" mauthUser
-  bytes <- runConduit $ rawRequestBody $$ CB.sinkLbs
   eitherResult <- liftIO $ runEitherT $ do
     now <- liftIO getCurrentTime
-    assetWrite (assetRepo' app) (map T.unpack path) (T.unpack name) (T.unpack type') (T.unpack userName) now bytes
+    assetWrite repo (map T.unpack path) (T.unpack name) (T.unpack type') (T.unpack userName) now Nothing
   case eitherResult of
     Left e -> do
       $logError $ T.pack $ show e
       fail "Internal error while trying to save asset."
     Right _ -> return ()
 
+deleteAssetR :: ContentPath -> Handler ()
+deleteAssetR (ContentPath path) = do
+  app   <- getYesod
+  bytes <- runConduit $ rawRequestBody $$ CB.sinkLbs
+  eitherResult <- liftIO $ runEitherT $ do
+    assetDelete (assetRepo' app) (map T.unpack path)
+  case eitherResult of
+    Left e -> do
+      $logError $ T.pack $ show e
+      fail "Internal error while trying to delete asset."
+    Right _ -> return ()
+
 getAssetsR :: ContentPath -> Handler Html
 getAssetsR (ContentPath path) = do
+  let parentPath = case path of
+                     [] -> []
+                     _  -> init path
   app <- getYesod
-  assets' <- liftIO $ runEitherT $ listAssets (assetRepo' app) (map T.unpack path)
+  assets' <- liftIO $ runEitherT $ do
+    let repo   = assetRepo' app
+        path'  = map T.unpack path
+    thisAsset <- assetRead repo $ urlToString $ map T.unpack path
+    assets    <- listAssets repo path'
+    return (thisAsset, assets)
+
   case assets' of
     Left e -> do
       $logError $ T.pack $ show e
       fail "Internal error while trying to load asset."
-    Right assets -> cbgLayout path [whamlet|
+    Right (thisAsset, assets) -> cbgLayout ("assets" : path) [whamlet|
       <div .assets .row>
-      $forall asset <- assets
-        <div .asset .col-md-1>
-          <a href=@{AssetsR $ ContentPath $ map T.pack (assetPath asset)} .thumbnail>
-            $if isPrefixOf "image/" $ assetType asset
-              <img src=#{assetBlob asset}>
-            $else
-              <span .glyphicon .glyphicon-folder-open>
+        <div #addFolder .modal .fade>
+          <script>
+            function addFolder(name) {
+              \$.ajax(
+                { url: "@{AssetR $ ContentPath path}/" + name
+                , type: "PUT"
+                , success: function(result) {
+                    window.location.assign("@{AssetsR $ ContentPath path}/" + name);
+                  }
+                }
+              );
+            }
+          <div .modal-dialog>
+            <div .modal-content>
+              <div .modal-header>
+                <button type=button .close data-dismiss=modal aria-hidden=true>&times;
+                <h4 .modal-title>Neuer Ordner
+              <div .modal-body>
+                <label for=folderName>Name des neuen Ordners
+                <input #folderName type=text name=folderName>
+              <div .modal-footer>
+                <button type=button .btn .btn-default data-dismiss=modal>Schliessen
+                <button type=submit .btn .btn-primary onClick=addFolder($('#folderName').val())>Erstellen
+        <div #uploadFile .modal .fade>
+          <div .modal-dialog>
+            <div .modal-content>
+              <form method=post action=@{AssetR $ ContentPath path} enctype="multipart/form-data">
+                <div .modal-header>
+                  <button type=button .close data-dismiss=modal aria-hidden=true>&times;
+                  <h4 .modal-title>Datei hochladen
+                <div .modal-body>
+                  <label for=fileName>Name der neuen Datei auf dem Server
+                  <input #fileName type=text name=fileName>
+                  <label for=file>Datei auswählen
+                  <input #file type=file name=file>
+                <div .modal-footer>
+                  <button type=button .btn .btn-default data-dismiss=modal>Schliessen
+                  <button type=submit .btn .btn-primary>Hochladen
+        <div #deleteFolder .modal .fade>
+          <script>
+            function deleteFolder() {
+              \$.ajax(
+                { url: "@{AssetR $ ContentPath path}"
+                , type: "DELETE"
+                , success: function(result) {
+                    window.location.replace("@{AssetsR $ ContentPath $ parentPath}");
+                  }
+                }
+              );
+            }
+          <div .modal-dialog>
+            <div .modal-content>
+              <div .modal-header>
+                <button type=button .close data-dismiss=modal aria-hidden=true>&times;
+                <h4 .modal-title>Wirklich löschen?
+              <div .modal-body>
+                <p>Der aktuell angezeigte Order wird mitsamt Inhalt gelöscht!
+              <div .modal-footer>
+                <button type=button .btn .btn-default data-dismiss=modal>Lieber doch nicht
+                <button type=submit .btn .btn-primary onClick=deleteFolder()>Löschen
+        <div .col-md-8>
+          <div .panel .panel-success>
+            <div .panel-heading>
+              <h3 .panel-title>Inhalt
+            <div .panel-body>
+              <div .assets .row>
+              $forall asset <- assets
+                <a href=@{AssetsR $ ContentPath $ map T.pack (assetPath asset)}>
+                  <div .asset .col-md-2 .thumbnail style="height: 150px; margin: 10px;">
+                    $if isPrefixOf "image/" $ assetType asset
+                      <img src=#{assetBlob asset}>
+                    $else
+                      <div style="height: 100px">
+                        <span class=#{icon asset} aria-hidden=true style="font-size: 6em">
+                        <div>#{assetName asset}
+        <div .col-md-4>
+          <div .panel .panel-info>
+            <div .panel-heading>
+              <h3 .panel-title>Metadaten
+            <div .panel-body>
+              <dl>
+                <dt>Name
+                <dd>#{assetName thisAsset}
+                <dt>Typ
+                <dd>#{assetType thisAsset}
+                <dt>Hochgeladen von
+                <dd>#{assetUploadedBy thisAsset}
+                <dt>Hochgeladen am
+                <dd>#{show $ assetUploadedDate thisAsset}
+          <div .panel .panel-danger>
+            <div .panel-heading>
+              <h3 .panel-title>Aktionen
+            <div .panel-body>
+              <a href=#addFolder role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Neuer Ordner
+              <a href=#uploadFile role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Datei hochladen
+              <a href=#deleteFolder role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Datei löschen
     |]
+
+  where
+    icon :: Asset -> Text
+    icon asset = if assetType asset `elem` ["application/x-directory", "unknown"]
+                 then "glyphicon glyphicon-folder-open"
+                 else "glyphicon glyphicon-file"
+ 

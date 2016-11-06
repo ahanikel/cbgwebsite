@@ -5,6 +5,7 @@ module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Asset ( Asset(assetRepo, assetNam
                                                      , assetBlob
                                                      , assetRead
                                                      , assetWrite
+                                                     , assetDelete
                                                      , listAssets
                                                      ) where
 
@@ -70,12 +71,18 @@ assetBlob :: Asset -> String
 assetBlob asset = root (assetRepo asset) </> urlToFilePath (assetPath asset) </> "asset.blob.p"
 
 -- exported
-assetWrite :: Repository -> [String] -> String -> String -> String -> DateTime -> BL.ByteString -> RepositoryContext ()
+assetWrite :: Repository -> [String] -> String -> String -> String -> DateTime -> Maybe BL.ByteString -> RepositoryContext ()
 assetWrite repo path name type' uploadedBy uploadedDate blob = do
   let asset = Asset repo path name type' uploadedBy uploadedDate
       node  = toNode asset
   writeItem asset
-  writeProperty node "asset.blob" blob
+  case blob of
+    Just blob' -> writeProperty node "asset.blob" blob'
+    Nothing -> return ()
+
+-- exported
+assetDelete :: Repository -> [String] -> RepositoryContext ()
+assetDelete repo path = getNode repo path >>= deleteNode
 
 -- exported
 listAssets :: Repository -> [String] -> RepositoryContext [Asset]
