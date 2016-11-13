@@ -394,12 +394,14 @@ instance PathMultiPiece ContentPath where
 
 getEditContentR :: ContentPath -> Handler Html
 getEditContentR (ContentPath pieces) = do
+    let url = map T.unpack pieces
     app <- getYesod
-    eitherNode <- liftIO $ runEitherT $ do
-        let url = map T.unpack pieces
-        getNode (contentRepo app) url
+    eitherNode <- liftIO $ runEitherT $ getNode (contentRepo app) url
     case eitherNode of
-        Left _ -> notFound
+        Left _ -> case url of
+          [] -> notFound
+          _  -> do
+            editLayout ("content" : pieces) $ toWidget $ toHtml T.empty
         Right node -> do
           res <- liftIO $ runEitherT $ liftM UL8.toString $ getProperty node "text.html"
           prop <- either (fail . show) return res
@@ -410,17 +412,23 @@ getEditContentR (ContentPath pieces) = do
 
 postEditContentR :: ContentPath -> Handler Html
 postEditContentR (ContentPath pieces) = do
+    let url = map T.unpack pieces
     app <- getYesod
-    eitherNode <- liftIO $ runEitherT $ do
-        let url = map T.unpack pieces
-        getNode (contentRepo app) url
-    case eitherNode of
-        Left _ -> notFound
-        Right node -> do
-          body <- runInputPost $ ireq textField "body"
-          liftIO $ runEitherT $ writeProperty node "text.html" (UL8.fromString $ T.unpack body)
-          --redirect $ joinPath ("/content/" : (map unpack pieces))
-          withUrlRenderer [hamlet||]
+    eitherNode <- liftIO $ runEitherT $ getNode (contentRepo app) url
+    node <- case eitherNode of
+        Left _ -> case url of
+          [] -> notFound
+          _  -> do
+            let name = last url
+                repo = contentRepo app
+                node = Node name url [] repo
+            liftIO $ runEitherT $ writeNode node
+            return node
+        Right node -> return node
+    body <- runInputPost $ ireq textField "body"
+    liftIO $ runEitherT $ writeProperty node "text.html" (UL8.fromString $ T.unpack body)
+    --redirect $ joinPath ("/content/" : (map unpack pieces))
+    withUrlRenderer [hamlet||]
 
 getContentR :: ContentPath -> Handler Html
 getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
@@ -460,6 +468,8 @@ navigationWidget maybeAuthId' path = do
                                                <li .expanded>
                                                    <a href=@{MembersR} title="Mitglieder">Mitglieder
                                                    <ul .menu>
+                                                       <li .leaf>
+                                                           <a href=@{EditContentR $ ContentPath []} title=Webseiten>Webseiten
                                                        <li .leaf>
                                                            <a href=@{MemberCalendarR} title=Kalender>Kalender
                                                        <li .leaf>
@@ -506,6 +516,8 @@ navigationWidget maybeAuthId' path = do
                                                    <a href=@{MembersR} title="Mitglieder">Mitglieder
                                                    <ul .menu>
                                                        <li .leaf>
+                                                           <a href=@{EditContentR $ ContentPath []} title=Webseiten>Webseiten
+                                                       <li .leaf>
                                                            <a href=@{MemberCalendarR} title=Kalender>Kalender
                                                        <li .leaf>
                                                            <a href=@{MemberListR} title=Mitgliederliste>Mitgliederliste
@@ -517,6 +529,18 @@ navigationWidget maybeAuthId' path = do
                                                            <a href=@{AssetR $ ContentPath ["Verein", "Statuten", "Statuten.pdf"]} title=Statuten>Statuten
                                                        <li .collapsed>
                                                            <a href=@{GalleriesR} title=Fotoalben>Fotoalben
+                                   |]
+                               ("edit" : "content" : _) ->
+                                   [whamlet|
+                                             <ul .menu>
+                                               <li .collapsed>
+                                                   <a href=@{RootR} title=Willkommen>Willkommen
+                                               <li .expanded>
+                                                   <a href=@{MembersR} title="Mitglieder">Mitglieder
+                                                   <ul .menu>
+                                                       <li .expanded>
+                                                           <a href=@{EditContentR $ ContentPath []} title=Webseiten>Webseiten
+                                                           ^{editContentNavigationFromRoot}
                                    |]
                                _ ->
                                    [whamlet|
@@ -543,26 +567,29 @@ navigationWidget maybeAuthId' path = do
 contentNavigationFromRoot :: Widget
 contentNavigationFromRoot = contentNavigation ["content"]
 
+editContentNavigationFromRoot :: Widget
+editContentNavigationFromRoot = contentNavigation ["edit","content"]
+
 contentNavigation :: [Text] -> Widget
 contentNavigation path = do app         <- getYesod
                             let path'    =  map T.unpack path
-                            let repoPath =  case path' of
-                                                ("content" : rest)          -> rest
-                                                ("edit" : "content" : rest) -> rest
+                            let (urlFunc, repoPath) =  case path' of
+                                                ("content" : rest)          -> (getContentUrlFromURL, rest)
+                                                ("edit" : "content" : rest) -> (getEditContentUrlFromURL, rest)
                                                 _                           -> fail "no content node"
                             eitherNodes <- liftIO $ runEitherT $ getNavigation (contentRepo app) (urlFromStrings repoPath) 2
                             case eitherNodes of
                                 Left _ ->
                                   return ()
                                 Right navi ->
-                                  renderNavi navi
+                                  renderNavi urlFunc navi
 
-renderNavi :: Navigation NavigationEntry -> Widget
-renderNavi Navigation {..} = do
+renderNavi :: (URL -> String) -> Navigation NavigationEntry -> Widget
+renderNavi toUrlFunc Navigation {..} = do
   let self     = Tree.rootLabel navTree
       siblings = sort (self : navSiblings)
       children = Tree.subForest navTree
-      url      = getContentUrlFromURL . neURL
+      url      = toUrlFunc . neURL
   [whamlet|
     <ul .menu>
       $forall entry <- siblings
@@ -571,15 +598,15 @@ renderNavi Navigation {..} = do
             <a href=#{url self} title=#{neTitle self}>#{neTitle self}
             $if (not . null) children
               $forall child <- children
-                ^{renderTree child}
+                ^{renderTree toUrlFunc child}
         $else
           <li .collapsed>
             <a href=#{url entry} title=#{neTitle entry}>#{neTitle entry}
   |]
 
-renderTree :: Tree.Tree NavigationEntry -> Widget
-renderTree tree = do
-  let url  = getContentUrlFromURL . neURL
+renderTree :: (URL -> String) -> Tree.Tree NavigationEntry -> Widget
+renderTree toUrlFunc tree = do
+  let url  = toUrlFunc . neURL
       self = Tree.rootLabel tree
       children = Tree.subForest tree
   [whamlet|
@@ -588,7 +615,7 @@ renderTree tree = do
         <a href=#{url self} title=#{neTitle self}>#{neTitle self}
         $if (not . null) children
           $forall child <- children
-            ^{renderTree child}
+            ^{renderTree toUrlFunc child}
   |]
 
 auditTrail :: [Text] -> Widget
@@ -642,6 +669,8 @@ galleryNavigation path = do
 getContentUrlFromURL :: URL -> String
 getContentUrlFromURL = ("/content/" ++) . urlToString
 
+getEditContentUrlFromURL :: URL -> String
+getEditContentUrlFromURL = ("/edit/content/" ++) . urlToString
 
 ------------------------------------------------------------------------------------------
 --- Member Calendar
@@ -1205,7 +1234,7 @@ getAssetsR (ContentPath path) = do
                 <a href=@{AssetsR $ ContentPath $ map T.pack (assetPath asset)}>
                   <div .asset .col-md-2 .thumbnail style="height: 150px; margin: 10px;">
                     $if isPrefixOf "image/" $ assetType asset
-                      <img src=#{assetBlob asset}>
+                      <img src=@{AssetR $ ContentPath $ map T.pack $ assetPath asset}>
                     $else
                       <div style="height: 100px">
                         <span class=#{icon asset} aria-hidden=true style="font-size: 6em">
