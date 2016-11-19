@@ -14,22 +14,10 @@ Executable CBGWebSite
   Main-Is: Main.hs
   Hs-Source-Dirs: src/app/haskell
   Default-Language: Haskell2010
+  ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N -with-rtsopts=-T
   Build-Depends: base
-               , bytestring
                , cbgwebsite
-               , http-conduit
-               , http-types
-               , monad-logger
-               , mtl
-               , persistent
-               , persistent-sqlite
-               , persistent-template
-               , text
-               , wai
-               , warp
-               , warp-tls
-               , yesod
-               , yesod-static
+               , ekg
 
 Library
   Hs-Source-Dirs: src/main/haskell
@@ -46,7 +34,15 @@ Library
                  , CH.ComeBackGloebb.CBGWebSite.Repo.Impl.FileStorage
                  , CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
                  , CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Assets
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Calendar
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Content
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Galleries
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.MemberList
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Root
                  , CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Foundation
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout
                  , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
                  , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
   Build-Depends: base
@@ -63,6 +59,7 @@ Library
                , http-conduit
                , http-types
                , mime-mail
+               , monad-logger
                , mtl
                , pandoc
                , persistent-sqlite
@@ -74,6 +71,8 @@ Library
                , uuid
                , vector
                , wai
+               , warp
+               , warp-tls
                , yesod
                , yesod-auth
                , yesod-auth-account-cbg
