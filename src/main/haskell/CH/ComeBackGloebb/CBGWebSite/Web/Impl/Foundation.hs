@@ -14,6 +14,7 @@ module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Foundation where
 import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Privileges
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Users
+import           CH.ComeBackGloebb.CBGWebSite.Web.Component
 
 -- Yesod
 import           Yesod hiding (deleteBy, joinPath, renderBootstrap)
@@ -22,6 +23,7 @@ import           Yesod.Auth.Account
 import           Yesod.Auth.GoogleEmail2
 import           Yesod.Static (Static, staticFiles)
 import           Network.HTTP.Conduit (Manager)
+import           Text.Hamlet (hamletFile)
 
 -- database for auth
 import           Database.Persist.Sqlite                            (ConnectionPool,
@@ -53,11 +55,7 @@ staticFiles "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static"
 data CBGWebSite = CBGWebSite { getStatic    :: Static
                              , getSem       :: MVar Bool
                              , httpManager  :: Manager
-                             , contentRepo  :: Repository
-                             , memberRepo   :: Repository
-                             , calendarRepo :: Repository
-                             , galleryRepo  :: Repository
-                             , assetRepo'   :: Repository
+                             , components   :: [Component CBGWebSite]
                              , clientId     :: T.Text
                              , clientSecret :: T.Text
                              , dbPool       :: ConnectionPool
@@ -86,10 +84,11 @@ mkYesodData "CBGWebSite" [parseRoutes|
     /upload/image/#T.Text             UploadImageR          POST
     /assets/+ContentPath              AssetsR               GET
     /asset/+ContentPath               AssetR                GET POST PUT DELETE
+--    /nav/+ContentPath                 NavR                  GET
 |]
 
 instance Yesod CBGWebSite where
-    --defaultLayout                             = cbgLayout []
+    defaultLayout                             = defaultLayout'
     approot                                   = ApprootStatic "https://test.comebackgloebb.ch"
     -- isAuthorized route isWriteRequest? = ...
     isAuthorized RootR                  False = return Authorized
@@ -222,3 +221,10 @@ data ContentPath = ContentPath [T.Text]
 instance PathMultiPiece ContentPath where
     toPathMultiPiece (ContentPath pieces) = pieces
     fromPathMultiPiece = Just . ContentPath . filter (/= "..")
+
+defaultLayout' :: Widget -> Handler Html
+defaultLayout' widget = do pageContent     <- widgetToPageContent widget
+                           let maybeAuthId' = Nothing :: Maybe (AuthId CBGWebSite)
+                           navi            <- widgetToPageContent $ return ()
+                           trail           <- widgetToPageContent $ return ()
+                           withUrlRenderer $(hamletFile "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/Impl/newlayout.hamlet")

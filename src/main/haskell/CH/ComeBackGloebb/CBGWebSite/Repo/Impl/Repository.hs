@@ -134,7 +134,7 @@ type RepositoryContext a = EitherT IOError IO a
 readPropertyNames :: FilePath -> IO [String]
 readPropertyNames path = readFiles           >>=
                          filterM filterFiles >>=
-                         mapM (\(pname, _) -> return $ pathCompFromFilePath pname)
+                         mapM (return.fst)
     where
           -- return a list of pairs (fileName, completePath), e.g. ("text.md", "content/welcome/text.md")
           readFiles :: IO [(FilePath, FilePath)]

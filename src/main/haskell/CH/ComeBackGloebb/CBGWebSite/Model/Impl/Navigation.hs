@@ -12,7 +12,8 @@ import           Data.Foldable
 import           Data.Traversable
 import qualified Data.Tree                                         as T
 
-data Navigation a = Navigation { navParent   :: Maybe a
+data Navigation a = Navigation { navSelf     :: a
+                               , navParent   :: Maybe a
                                , navSiblings :: [a]
                                , navTree     :: T.Tree a
                                }
@@ -44,7 +45,7 @@ getNavigation repo path subLevels = do
   parent   <- getParentNode self
   siblings <- getSiblings self
   children <- getTree self subLevels
-  let navi =  Navigation parent siblings children
+  let navi =  Navigation self parent siblings children
   check $ mapM naviEntryFromNode navi
 
 naviEntryFromNode :: Node -> IO NavigationEntry
@@ -53,6 +54,14 @@ naviEntryFromNode n = do
   rank  <- getRankOrZero n
   let url = node_path n
   return $ NavigationEntry title rank url
+
+navigationFromNode :: Int -> Node -> RepositoryContext (Navigation NavigationEntry)
+navigationFromNode subLevels self = do
+  parent   <- getParentNode self
+  siblings <- getSiblings self
+  children <- getTree self subLevels
+  let navi =  Navigation self parent siblings children
+  check $ mapM naviEntryFromNode navi
 
 getTitleOrNodeName :: Node -> IO String
 getTitleOrNodeName n = do
@@ -65,10 +74,10 @@ getRankOrZero n = do
   return $ either (const 0) id eprop
 
 -- exported
-getTrail :: Node -> RepositoryContext [NavigationEntry]
+getTrail :: Node -> RepositoryContext [Navigation NavigationEntry]
 getTrail node = do
   ns <- foldrM appendToNodes [node] $ node_path node
-  mapM (check . naviEntryFromNode) ns
+  mapM (navigationFromNode 1) ns
   where
     appendToNodes :: PathComponent -> [Node] -> RepositoryContext [Node]
     appendToNodes _ (n : ns) = do mp <- getParentNode n

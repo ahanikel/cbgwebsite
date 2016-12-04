@@ -34,6 +34,7 @@ Library
                  , CH.ComeBackGloebb.CBGWebSite.Repo.Impl.FileStorage
                  , CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
                  , CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
+                 , CH.ComeBackGloebb.CBGWebSite.Web.Component
                  , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Assets
                  , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Calendar
                  , CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Content

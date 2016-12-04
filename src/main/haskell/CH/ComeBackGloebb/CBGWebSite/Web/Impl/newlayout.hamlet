@@ -1,0 +1,38 @@
+$doctype 5
+<html lang=en>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset=utf-8>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name=viewport content="width=device-width, initial-scale=1">
+    <meta name=description content="D'Websytte vom Come Back Glöbb Allschwil">
+    <meta name=author content="Come Back Glöbb Allschwil">
+    <link rel=icon href=@{FavR}>
+    <title>#{pageTitle pageContent}
+    <link rel=stylesheet href=@{StaticR bootstrap_css}>
+    <link rel=stylesheet href=@{StaticR ie10_viewport_bug_workaround_css}>
+    <link rel=stylesheet href=@{StaticR newcbg_css}>
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js">
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js">
+    <![endif]-->
+    ^{pageHead pageContent}
+  <body>
+    <nav .navbar .navbar-fixed-top>
+      <div .container-fluid>
+        <div .row>
+          <div .navbar-header>
+            <a .navbar-brand href=#>
+              <img #cbg-logo .img-responsive src=@{StaticR cbg_logo_png}>
+          <div .col-md-offset-2>
+            <div .col-md-10>
+              <div #navbar .navbar-collapse>
+                ^{pageBody trail}
+    <div .container>
+      ^{pageBody pageContent}
+      <hr>
+      <footer>
+        <p>© 2016 Come Back Glöbb
+    <script src=@{StaticR jquery_js}>
+    <script src=@{StaticR bootstrap_js}>
+    <script src=@{StaticR ie10_viewport_bug_workaround_js}>

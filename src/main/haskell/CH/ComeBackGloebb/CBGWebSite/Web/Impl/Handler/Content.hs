@@ -13,26 +13,50 @@
 module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Content where
 
 -- CBG
+import CH.ComeBackGloebb.CBGWebSite.Model.Impl.Navigation
 import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Foundation
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout
+import CH.ComeBackGloebb.CBGWebSite.Web.Component
 
 -- Yesod
 import Yesod
+import Yesod.Auth
+import Text.Hamlet
 
 -- other imports
 import           Control.Monad                                      (liftM)
-import           Control.Monad.Trans.Either                         (left,
-                                                                     runEitherT)
+import           Control.Monad.Trans.Either                         (runEitherT)
 import qualified Data.ByteString.Lazy.UTF8                          as UL8
-import qualified Data.Text as T
+import           Data.List                                          (find, sort)
+import           Data.Maybe                                         (fromMaybe)
+import qualified Data.Text                                          as T
+import qualified Data.Tree                                          as Tree
+import Debug.Trace
+
+component :: Handler (Component CBGWebSite)
+component = do
+  cs <- components <$> getYesod
+  let mc = find (== "Content") cs
+  case mc of
+    Nothing -> fail "Component not found."
+    Just c  -> return c
+
+component' :: WidgetT CBGWebSite IO (Component CBGWebSite)
+component' = do
+  mcomponent <- find (== "Content") <$> components <$> getYesod
+  case mcomponent of
+    Nothing ->
+      fail "Component not found."
+    Just component -> return component
 
 getContentR :: ContentPath -> Handler Html
-getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
-    app <- getYesod
+getContentR (ContentPath pieces) = do
+  repo <- compRepository <$> component
+  contentLayout ("content" : pieces) $ do
     eitherNode <- liftIO $ runEitherT $ do
         let url = map T.unpack pieces
-        getNode (contentRepo app) url
+        getNode repo url
     case eitherNode of
         Left _ -> notFound
         Right node -> do
@@ -43,36 +67,248 @@ getContentR (ContentPath pieces) = cbgLayout ("content" : pieces) $ do
 getEditContentR :: ContentPath -> Handler Html
 getEditContentR (ContentPath pieces) = do
     let url = map T.unpack pieces
-    app <- getYesod
-    eitherNode <- liftIO $ runEitherT $ getNode (contentRepo app) url
+    repo <- compRepository <$> component
+    eitherNode <- liftIO $ runEitherT $ getNode repo url
     case eitherNode of
         Left _ -> case url of
           [] -> notFound
           _  -> do
-            editLayout ("content" : pieces) $ toWidget $ toHtml T.empty
+            editLayout
+              ("content" : pieces)
+              (toWidget $ toHtml T.empty)
+              (toWidget $ toHtml T.empty)
         Right node -> do
-          res <- liftIO $ runEitherT $ liftM UL8.toString $ getProperty node "text.html"
-          prop <- either (fail . show) return res
-          let contentBody = toWidget $ toHtml prop
-          -- let propertiesWidget =
-          -- let permissionsWidget =
-          editLayout ("content" : pieces) contentBody
+          let propNames   = node_props node
+          res            <- liftIO $ runEitherT $ mapM (getProperty node) (trace (show propNames) propNames)
+          propValues     <- either (fail . show) (mapM (return . UL8.toString)) res
+          let props       = zip propNames propValues :: [(String, String)]
+              textHtml    = snd <$> find ((== "text.html") . fst) props
+              contentBody = toWidget $ toHtml $ fromMaybe "" textHtml
+              props'      = filter ((/= "text.html") . fst) props
+              props''     = map createForm props'
+              createForm (p,v) = [whamlet|
+                <span>
+                  ^{label p}
+                  ^{element p v}
+                  <button .removeProp type=button onClick=removeProp("#{p}")>
+                    <span .glyphicon .glyphicon-minus-sign>
+              |]
+              label p = [whamlet|
+                <label for=#{"prop_" ++ p}>#{p}
+              |]
+              element p v = [whamlet|
+                <input type=text id=#{"prop_" ++ p} name=#{p} value=#{v}>
+              |]
+              propertiesWidget = [whamlet|
+                <script>
+                  function addProp(p) {
+                    \$('.ppRow:last-child').before('<div class="ppRow"><span><label for="prop_"' + p + '>' + p + '</label><input type="text" id="' + p + '" name = "' + p + '" value=""><button class="removeProp" type="button" onClick="removeProp(\"' + p + '\")"><span class="glyphicon glyphicon-minus-sign"></span></button></span></div>');
+                  }
+                <form #pageProperties>
+                  $forall p <- props''
+                    <div .ppRow>
+                      ^{p}
+                  <div .ppRow>
+                    <span #addProp>
+                      <input #newProp type=text>
+                      <button .addProp type=button onClick=addProp($('#newProp').val())>
+                        <span .glyphicon .glyphicon-plus-sign>
+              |]
+          editLayout ("content" : pieces) contentBody propertiesWidget
 
 postEditContentR :: ContentPath -> Handler Html
 postEditContentR (ContentPath pieces) = do
     let url = map T.unpack pieces
-    app <- getYesod
-    eitherNode <- liftIO $ runEitherT $ getNode (contentRepo app) url
+    repo <- compRepository <$> component
+    eitherNode <- liftIO $ runEitherT $ getNode repo url
     node <- case eitherNode of
         Left _ -> case url of
           [] -> notFound
           _  -> do
             let name = last url
-                repo = contentRepo app
                 node = Node name url [] repo
-            liftIO $ runEitherT $ writeNode node
+            _ <- liftIO $ runEitherT $ writeNode node
             return node
         Right node -> return node
     body <- runInputPost $ ireq textField "body"
-    liftIO $ runEitherT $ writeProperty node "text.html" (UL8.fromString $ T.unpack body)
+    res <- liftIO $ runEitherT $ writeProperty node "text.html" (UL8.fromString $ T.unpack body)
+    case res of
+      Left err -> fail $ show err
+      Right () -> return ()
     withUrlRenderer [hamlet||]
+
+contentLayout :: [T.Text] -> Widget -> Handler Html
+contentLayout path body = do
+  comp <- component
+  layout comp path body
+
+editLayout :: [T.Text] -> Widget -> Widget -> Handler Html
+editLayout path body props =
+  contentLayout ("edit" : path) $ editPage body props
+
+editPage :: Widget -> Widget -> Widget
+editPage contentBody propsPanel = [whamlet|
+    <div #buttons>
+        <button #savebutton type=button .btn .btn-lg .btn-primary>
+            Save
+    <script>
+        function restoreSaveButton() {
+            \$('#savebutton').removeClass('btn-success')
+                            .removeClass('btn-danger')
+                            .addClass('btn-primary')
+                            .text('Save');
+        }
+        function successSaveButton() {
+            \$('#savebutton').removeClass('btn-primary')
+                            .removeClass('btn-danger')
+                            .addClass('btn-success')
+                            .text('Saved!');
+            window.setTimeout(restoreSaveButton, 5000);
+        }
+        function errorSaveButton() {
+            \$('#savebutton').removeClass('btn-success')
+                            .removeClass('btn-primary')
+                            .addClass('btn-danger')
+                            .text('Error while saving! Retry?');
+            window.setTimeout(restoreSaveButton, 5000);
+        }
+        \$('#savebutton').click(function(event) {
+            \$.post('#', {
+                body: CKEDITOR.instances.body.getData()
+              , props: $('#pageProperties').serializeArray()
+            }, function(ret) {})
+            .success(successSaveButton)
+            .error(errorSaveButton);
+        });
+    <div>
+        <ul .nav .nav-tabs role=tablist>
+            <li role=presentation .active>
+                <a href=#content aria-controls=content role=tab data-toggle=tab>Content
+            <li role=presentation>
+                <a href=#properties aria-controls=properties role=tab data-toggle=tab>Properties
+        <div .tab-content>
+            <div role=tabpanel .tab-pane .active id=content>
+                ^{ckEditor contentBody}
+            <div role=tabpanel .tab-pane id=properties>
+                ^{propsPanel}
+    |]
+
+ckEditor :: Widget -> Widget
+ckEditor widget = do
+    [whamlet|
+        <textarea #body name=body>
+            ^{widget}
+        <script>
+            CKEDITOR.replace('body');
+   |]
+    toWidgetHead [hamlet|
+        <script src=//cdn.ckeditor.com/4.5.7/standard/ckeditor.js>
+    |]
+
+contentNavigationFromRoot :: Widget
+contentNavigationFromRoot = contentNavigation ["content"]
+
+editContentNavigationFromRoot :: Widget
+editContentNavigationFromRoot = contentNavigation ["edit","content"]
+
+contentNavigation :: [T.Text] -> Widget
+contentNavigation path = do
+  repo                   <- compRepository <$> component'
+  let path'               = map T.unpack path
+      (urlFunc, repoPath) =
+        case path' of
+          ("content" : rest)          -> (getContentUrlFromURL, rest)
+          ("edit" : "content" : rest) -> (getEditContentUrlFromURL, rest)
+          _                           -> fail "no content node"
+  eitherNodes <- liftIO $ runEitherT $ getNavigation repo (urlFromStrings repoPath) 1
+  case eitherNodes of
+    Left _ ->
+      return ()
+    Right navi ->
+      renderNavi urlFunc navi
+
+renderNavi :: (URL -> String) -> Navigation NavigationEntry -> Widget
+renderNavi toUrlFunc Navigation {..} = do
+  let self     = Tree.rootLabel navTree
+      siblings = sort (self : navSiblings)
+      children = Tree.subForest navTree
+      url      = toUrlFunc . neURL
+  [whamlet|
+    <ul .menu>
+      $forall entry <- siblings
+        $if entry == self
+          <li .collapsed>
+            <a href=#{url self} title=#{neTitle self}>#{neTitle self}
+            $if (not . null) children
+              $forall child <- children
+                ^{renderTree toUrlFunc child}
+        $else
+          <li .collapsed>
+            <a href=#{url entry} title=#{neTitle entry}>#{neTitle entry}
+  |]
+
+renderTree :: (URL -> String) -> Tree.Tree NavigationEntry -> Widget
+renderTree toUrlFunc tree = do
+  let url  = toUrlFunc . neURL
+      self = Tree.rootLabel tree
+      children = Tree.subForest tree
+  [whamlet|
+    <ul .menu>
+      <li .expanded>
+        <a href=#{url self} title=#{neTitle self}>#{neTitle self}
+        $if (not . null) children
+          $forall child <- children
+            ^{renderTree toUrlFunc child}
+  |]
+
+getContentUrlFromURL :: URL -> String
+getContentUrlFromURL = ("/content/" ++) . urlToString
+
+getEditContentUrlFromURL :: URL -> String
+getEditContentUrlFromURL = ("/edit/content/" ++) . urlToString
+
+auditTrail :: [T.Text] -> Widget
+auditTrail ("edit" : "content" : rest) = do
+  repo <- compRepository <$> component'
+  [whamlet|
+    <ul .nav .nav-pills .navbar-nav>
+      <li role=presentation .active>
+        <a href=@{EditContentR $ ContentPath []}>Bearbeiten
+      ^{auditTrail' EditContentR repo rest}
+  |]
+
+auditTrail (prefix : rest) = do
+  repo <- compRepository <$> component'
+  [whamlet|
+    <ul .nav .nav-pills .navbar-nav>
+      ^{auditTrail' ContentR repo rest}
+  |]
+
+auditTrail' :: (ContentPath -> Route CBGWebSite) -> Repository -> [T.Text] -> Widget
+auditTrail' linkFunc repo path = do
+  eitherTrail <- liftIO $ runEitherT $ do
+    node <- getNode repo (map T.unpack path)
+    getTrail node
+  case eitherTrail of
+    Left _ ->
+      return ()
+    Right trail -> do
+      mapM_ encodeTrail trail
+  where
+    url = linkFunc . ContentPath . (map T.pack) . neURL
+    encodeTrail n = do
+      let ne = navSelf n
+          nces :: [NavigationEntry]
+          nces = map Tree.rootLabel $ Tree.subForest $ navTree n
+      [whamlet|
+        <li role=presentation .active .dropdown>
+          <a href=# .dropdown-toggle data-toggle=dropdown role=button aria-haspopup=true aria-expanded=false title=#{neTitle ne}>
+              #{neTitle ne}
+              $if not $ null nces
+                <span .caret>
+          $if not $ null nces
+            <ul .dropdown-menu>
+              $forall nce <- nces
+                <li>
+                  <a href=@{url nce}>#{neTitle nce}
+      |]

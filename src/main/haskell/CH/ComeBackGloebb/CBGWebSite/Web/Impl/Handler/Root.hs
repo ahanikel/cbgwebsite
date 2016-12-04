@@ -13,18 +13,13 @@
 module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Root where
 
 -- CBG
-import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Foundation
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout
 
 -- Yesod
 import Yesod
+import Yesod.Auth
+import Text.Hamlet
 
--- other imports
-import           Control.Monad                                      (liftM)
-import           Control.Monad.Trans.Either                         (left,
-                                                                     runEitherT)
-import qualified Data.ByteString.Lazy.UTF8                          as UL8
 import qualified Data.Text as T
 
 getRootR :: Handler ()
@@ -34,7 +29,7 @@ getFavR :: Handler ()
 getFavR = sendFile "image/png" "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static/cbg-favicon.png"
 
 getMembersR :: Handler Html
-getMembersR = cbgLayout ["members"] [whamlet|
+getMembersR = layout ["members"] [whamlet|
   <h1>Willkommen auf der neuen Come Back Glöbb Homepage!
   <p>Auf den ersten Blick sieht alles so aus wie vorher, aber das täuscht :-)
   <p>Vorteile:
@@ -60,3 +55,33 @@ getMembersR = cbgLayout ["members"] [whamlet|
        <li>Auf eine E-Mail vom Come Back Glöbb warten und den enthaltenen Link anklicken.
        <li>Das neue Passwort zwei mal eingeben (kann auch dasselbe wie das alte sein). Fertig!
 |]
+
+layout :: [T.Text] -> Widget -> Handler Html
+layout path widget = do
+  pageContent  <- widgetToPageContent widget
+  maybeAuthId' <- maybeAuthId
+  trail        <- widgetToPageContent $ auditTrail path
+  withUrlRenderer $(hamletFile "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/Impl/newlayout.hamlet")
+
+auditTrail ("members" : rest) = do
+  [whamlet|
+    <ul .nav .navbar-nav>
+      <li>
+        <a href=@{RootR}>Startseite
+      <li>
+        <a href=@{MembersR}>Mitglieder
+  |]
+
+--    <div .jumbotron>
+--      <div .container>
+--        <div .row>
+--          <div .col-md-8>
+--            <h1>Willkommen!
+--            <p>
+--              ...auf der Website des Come Back Glöbb Allschwil.
+--              Wir möchten Ihnen auf dieser Seite unseren Verein näher bringen
+--              und Sie über unsere aktuellen Tätigkeiten auf dem Laufenden halten.
+--            <p>
+--            <a .btn .btn-primary .btn-lg href=# role=button>Mehr erfahren »
+--          <div .col-md-4>
+--            <img .img-responsive src=@{StaticR gloebb_transparent_png}>

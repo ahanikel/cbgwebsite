@@ -36,5 +36,8 @@ instance Enum DateTime where
 calendarForMonth :: Int -> Int -> [[DateTime]]
 calendarForMonth year month = map (map fst) $ groupBy mondays $ zip [startOfCal .. endOfCal] (cycle [1 .. 7])
   where startOfCal = mondayBefore $ fromGregorian' (fromIntegral year) month 1
-        endOfCal   = sundayAfter  $ fromGregorian' (fromIntegral year) (month + 1) 1 `subtractDays` 1
+        endOfCal   = sundayAfter  $ fromGregorian' (fromIntegral year') month' 1 `subtractDays` 1
+        (year', month') = if month == 12
+                          then (year + 1, 1)
+                          else (year, month + 1)
         mondays (_, x) (_, y) = y > 1

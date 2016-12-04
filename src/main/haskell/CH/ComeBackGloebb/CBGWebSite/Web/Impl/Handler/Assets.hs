@@ -13,31 +13,48 @@
 module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Assets where
 
 -- CBG
-import CH.ComeBackGloebb.CBGWebSite.Model.Impl.Asset
-import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Foundation
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout
+import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Asset
+import           CH.ComeBackGloebb.CBGWebSite.Model.Impl.Navigation
+import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
+import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Foundation
+import           CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout
+import           CH.ComeBackGloebb.CBGWebSite.Web.Component
 
 -- Yesod
 import Yesod
 import Yesod.Auth
+import Text.Hamlet
 
 -- other imports
 import           Control.Monad                                      (liftM)
-import           Control.Monad.Trans.Either                         (left,
-                                                                     runEitherT)
-import qualified Data.ByteString.Lazy.UTF8                          as UL8
+import           Control.Monad.Trans.Either                         (runEitherT)
 import qualified Data.ByteString.UTF8                               as U8
 import           Data.Conduit
 import qualified Data.Conduit.Binary                                as CB
 import           Data.DateTime
-import           Data.List (intercalate, isPrefixOf)
+import           Data.List (intercalate, isPrefixOf, find)
 import           Data.Maybe                                         (fromMaybe)
 import qualified Data.Text as T
 
+component :: Handler (Component CBGWebSite)
+component = do
+  cs <- components <$> getYesod
+  let mc = find (== "Assets") cs
+  case mc of
+    Nothing -> fail "Component not found."
+    Just c  -> return c
+
+component' :: WidgetT CBGWebSite IO (Component CBGWebSite)
+component' = do
+  cs <- components <$> getYesod
+  let mc = find (== "Assets") cs
+  case mc of
+    Nothing -> fail "Component not found."
+    Just c  -> return c
+
 getAssetR :: ContentPath -> Handler ()
 getAssetR (ContentPath path) = do
-  repo <- liftM assetRepo' getYesod
+  repo <- compRepository <$> component
   let filePath = intercalate "/" $ map T.unpack path
   eitherAsset <- liftIO $ runEitherT $ assetRead repo filePath
   case eitherAsset of
@@ -53,14 +70,14 @@ postAssetR (ContentPath path) = do
   case mauthUser of
     Nothing -> permissionDenied ""
     Just userName -> do
-      let upload (f, file) = do
-           app          <- getYesod
+      let upload (_, file) = do
+           repo         <- compRepository <$> component
            let name      = fromMaybe "noName" $ lookup "fileName" params
                type'     = fileContentType file
            bytes        <- runConduit $ fileSource file $$ CB.sinkLbs
            eitherResult <- liftIO $ runEitherT $ do
              now <- liftIO getCurrentTime
-             assetWrite (assetRepo' app) (map T.unpack (path ++ [name])) (T.unpack name) (T.unpack type') (T.unpack userName) now (Just bytes)
+             assetWrite repo (map T.unpack (path ++ [name])) (T.unpack name) (T.unpack type') (T.unpack userName) now (Just bytes)
            case eitherResult of
              Left e -> do
                $logError $ T.pack $ show e
@@ -72,10 +89,8 @@ postAssetR (ContentPath path) = do
 putAssetR :: ContentPath -> Handler ()
 putAssetR (ContentPath path) = do
   mauthUser <- maybeAuthId
-  app   <- getYesod
+  repo      <- compRepository <$> component
   let name = last path
-      path' = init path
-      repo = assetRepo' app
       type' = "application/x-directory"
       userName = fromMaybe "anonymous" mauthUser
   eitherResult <- liftIO $ runEitherT $ do
@@ -89,10 +104,9 @@ putAssetR (ContentPath path) = do
 
 deleteAssetR :: ContentPath -> Handler ()
 deleteAssetR (ContentPath path) = do
-  app   <- getYesod
-  bytes <- runConduit $ rawRequestBody $$ CB.sinkLbs
+  repo <- compRepository <$> component
   eitherResult <- liftIO $ runEitherT $ do
-    assetDelete (assetRepo' app) (map T.unpack path)
+    assetDelete repo (map T.unpack path)
   case eitherResult of
     Left e -> do
       $logError $ T.pack $ show e
@@ -101,13 +115,14 @@ deleteAssetR (ContentPath path) = do
 
 getAssetsR :: ContentPath -> Handler Html
 getAssetsR (ContentPath path) = do
-  let parentPath = case path of
-                     [] -> []
-                     _  -> init path
-  app <- getYesod
+  let parentPath =
+        case path of
+          [] -> []
+          _  -> init path
+  comp <- component
+  let repo = compRepository comp
   assets' <- liftIO $ runEitherT $ do
-    let repo   = assetRepo' app
-        path'  = map T.unpack path
+    let path'  = map T.unpack path
     thisAsset <- assetRead repo $ urlToString $ map T.unpack path
     assets    <- listAssets repo path'
     return (thisAsset, assets)
@@ -116,7 +131,7 @@ getAssetsR (ContentPath path) = do
     Left e -> do
       $logError $ T.pack $ show e
       fail "Internal error while trying to load asset."
-    Right (thisAsset, assets) -> cbgLayout ("assets" : path) [whamlet|
+    Right (thisAsset, assets) -> layout comp ("assets" : path) [whamlet|
       <div .assets .row>
         <div #addFolder .modal .fade>
           <script>
@@ -222,3 +237,32 @@ getAssetsR (ContentPath path) = do
                  then "glyphicon glyphicon-folder-open"
                  else "glyphicon glyphicon-file"
  
+auditTrail :: [T.Text] -> Widget
+auditTrail (_ : rest) = do
+  repo <- compRepository <$> component'
+  [whamlet|
+    <ul .nav .nav-pills .navbar-nav>
+      <li role=presentation .active>
+        <a href=@{RootR}>Startseite
+      <li role=presentation .active>
+        <a href=@{AssetsR $ ContentPath []}>Dateien
+      ^{auditTrail' repo rest}
+  |]
+
+auditTrail' :: Repository -> [T.Text] -> Widget
+auditTrail' repo path = do
+  eitherNodes <- liftIO $ runEitherT $ do
+    node <- getNode repo (map T.unpack path)
+    getTrail node
+  case eitherNodes of
+    Left _ ->
+      return ()
+    Right nodes ->
+      mapM_ (encodeTrail . navSelf) (tail nodes)
+  where
+    encodeTrail n =
+      [whamlet|
+        <li role=presentation .active>
+          <a href=@{url n} title=#{neTitle n}>#{neTitle n}
+      |]
+    url = AssetsR . ContentPath . (map T.pack) . neURL

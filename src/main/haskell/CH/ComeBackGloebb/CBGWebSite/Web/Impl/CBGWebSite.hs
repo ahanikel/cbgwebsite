@@ -16,11 +16,12 @@ module CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite (cbgWebSite) where
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Foundation
 import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Root
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Assets
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Calendar
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Content
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Galleries
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.MemberList
+import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Assets as Assets
+import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Calendar as Calendar
+import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Content as Content
+import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Galleries as Galleries
+import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.MemberList as MemberList
+import CH.ComeBackGloebb.CBGWebSite.Web.Component
 
 -- Yesod
 import Yesod
@@ -47,11 +48,28 @@ mkFoundation dbPool = do
   getStatic       <- static "static"
   getSem          <- newMVar True
   httpManager     <- newManager tlsManagerSettings
-  let contentRepo  = Repository "data/content"
-  let memberRepo   = Repository "data/members"
-  let calendarRepo = Repository "data/calendar"
-  let galleryRepo  = Repository "data/galleries"
-  let assetRepo'   = Repository "data/assets"
+  let components   =
+        [ Component "Content"
+                    "Content"
+                    Content.auditTrail
+                    (Repository "data/content")
+        , Component "Members"
+                    "Mitglieder"
+                    MemberList.auditTrail
+                    (Repository "data/members")
+        , Component "Calendar"
+                    "Kalender"
+                    Calendar.auditTrail
+                    (Repository "data/calendar")
+        , Component "Galleries"
+                    "Fotos"
+                    Galleries.auditTrail
+                    (Repository "data/galleries")
+        , Component "Assets"
+                    "Dateien"
+                    Assets.auditTrail
+                    (Repository "data/assets")
+        ]
   clientId        <- T.pack <$> readFile "google.clientId"
   clientSecret    <- T.pack <$> readFile "google.clientSecret"
   return CBGWebSite {..}
@@ -72,7 +90,7 @@ cbgWebSite = do
 redirectHttp :: Application -> Application
 redirectHttp app req resp | isSecure req = app req resp
 
-redirectHttp app req resp                = resp $ responseLBS status302
+redirectHttp _   req resp                = resp $ responseLBS status302
                                            [ ("Location", B.concat
                                                [ "https://test.comebackgloebb.ch"
                                                , rawPathInfo req
