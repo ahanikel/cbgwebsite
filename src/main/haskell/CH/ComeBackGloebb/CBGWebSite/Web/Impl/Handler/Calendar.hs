@@ -186,3 +186,6 @@ auditTrail' path = do
     <li role=presentation .active>
       <a href=@{MemberCalendarR} title=#{T.concat path}>#{T.concat path}
   |]
+
+naviChildren :: [T.Text] -> Widget
+naviChildren _ = return ()

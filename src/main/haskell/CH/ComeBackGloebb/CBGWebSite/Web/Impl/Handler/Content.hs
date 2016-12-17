@@ -286,16 +286,9 @@ auditTrail (prefix : rest) = do
 
 auditTrail' :: (ContentPath -> Route CBGWebSite) -> Repository -> [T.Text] -> Widget
 auditTrail' linkFunc repo path = do
-  eitherTrail <- liftIO $ runEitherT $ do
-    node <- getNode repo (map T.unpack path)
-    getTrail node
-  case eitherTrail of
-    Left _ ->
-      return ()
-    Right trail -> do
-      mapM_ encodeTrail trail
+  trail <- getTrail' repo path
+  mapM_ encodeTrail trail
   where
-    url = linkFunc . ContentPath . (map T.pack) . neURL
     encodeTrail n = do
       let ne = navSelf n
           nces :: [NavigationEntry]
@@ -310,5 +303,30 @@ auditTrail' linkFunc repo path = do
             <ul .dropdown-menu>
               $forall nce <- nces
                 <li>
-                  <a href=@{url nce}>#{neTitle nce}
+                  <a href=@{url linkFunc nce}>#{neTitle nce}
       |]
+
+url linkFunc = linkFunc . ContentPath . (map T.pack) . neURL
+
+getTrail' :: Repository -> [T.Text] -> WidgetT CBGWebSite IO [Navigation NavigationEntry]
+getTrail' repo path = do
+  eitherNodes <- liftIO $ runEitherT $ do
+    node <- getNode repo (map T.unpack path)
+    getTrail node
+  return $ either (const []) id eitherNodes
+
+naviChildren :: [T.Text] -> Widget
+naviChildren ("edit" : "content" : rest) = naviChildren' EditContentR rest
+naviChildren ("content"          : rest) = naviChildren' ContentR rest
+
+naviChildren' :: (ContentPath -> Route CBGWebSite) -> [T.Text] -> Widget
+naviChildren' linkFunc path = do
+  repo <- compRepository <$> component'
+  trail <- getTrail' repo path
+  let children = map Tree.rootLabel $ Tree.subForest $ navTree $ last trail
+  [whamlet|
+    <ul .nav .nav-pills .nav-stacked>
+      $forall cld <- children
+        <li role=presentation .active>
+          <a href=@{url linkFunc cld} title=#{neTitle cld}>#{neTitle cld}
+  |]

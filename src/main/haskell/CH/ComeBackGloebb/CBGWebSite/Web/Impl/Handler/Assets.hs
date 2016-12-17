@@ -35,6 +35,7 @@ import           Data.DateTime
 import           Data.List (intercalate, isPrefixOf, find)
 import           Data.Maybe                                         (fromMaybe)
 import qualified Data.Text as T
+import qualified Data.Tree as Tree
 
 component :: Handler (Component CBGWebSite)
 component = do
@@ -206,7 +207,7 @@ getAssetsR (ContentPath path) = do
                       <img src=@{AssetR $ ContentPath $ map T.pack $ assetPath asset}>
                     $else
                       <div style="height: 100px">
-                        <span class=#{icon asset} aria-hidden=true style="font-size: 6em">
+                        ^{icon asset}
                         <div>#{assetName asset}
         <div .col-md-4>
           <div .panel .panel-info>
@@ -232,10 +233,14 @@ getAssetsR (ContentPath path) = do
     |]
 
   where
-    icon :: Asset -> T.Text
+    icon :: Asset -> Widget
     icon asset = if assetType asset `elem` ["application/x-directory", "unknown"]
-                 then "glyphicon glyphicon-folder-open"
-                 else "glyphicon glyphicon-file"
+                 then [whamlet|
+                   <img src=@{StaticR gnome_folder_png} aria-hidden=true>
+                 |]
+                 else [whamlet|
+                   <img src=@{StaticR gnome_text_x_generic_png} aria-hidden=true>
+                 |]
  
 auditTrail :: [T.Text] -> Widget
 auditTrail (_ : rest) = do
@@ -251,18 +256,32 @@ auditTrail (_ : rest) = do
 
 auditTrail' :: Repository -> [T.Text] -> Widget
 auditTrail' repo path = do
-  eitherNodes <- liftIO $ runEitherT $ do
-    node <- getNode repo (map T.unpack path)
-    getTrail node
-  case eitherNodes of
-    Left _ ->
-      return ()
-    Right nodes ->
-      mapM_ (encodeTrail . navSelf) (tail nodes)
+  trail <- getTrail' repo path
+  mapM_ (encodeTrail . navSelf) (tail trail)
   where
     encodeTrail n =
       [whamlet|
         <li role=presentation .active>
           <a href=@{url n} title=#{neTitle n}>#{neTitle n}
       |]
-    url = AssetsR . ContentPath . (map T.pack) . neURL
+
+url = AssetsR . ContentPath . (map T.pack) . neURL
+
+getTrail' :: Repository -> [T.Text] -> WidgetT CBGWebSite IO [Navigation NavigationEntry]
+getTrail' repo path = do
+  eitherNodes <- liftIO $ runEitherT $ do
+    node <- getNode repo (map T.unpack path)
+    getTrail node
+  return $ either (const []) id eitherNodes
+
+naviChildren :: [T.Text] -> Widget
+naviChildren (_ : path) = do
+  repo <- compRepository <$> component'
+  trail <- getTrail' repo path
+  let children = map Tree.rootLabel $ Tree.subForest $ navTree $ last trail
+  [whamlet|
+    <ul .nav .nav-pills>
+      $forall cld <- children
+        <li role=presentation .active>
+          <a href=@{url cld} title=#{neTitle cld}>#{neTitle cld}
+  |]

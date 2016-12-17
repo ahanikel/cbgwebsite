@@ -26,10 +26,10 @@ import qualified Data.Text as T
 
 layout :: Component CBGWebSite -> [T.Text] -> Widget -> Handler Html
 layout comp path widget = do
-  let compNavi =  compNavigation comp
   pageContent  <- widgetToPageContent widget
   maybeAuthId' <- maybeAuthId
-  trail        <- widgetToPageContent $ compNavi path >> loginWidget maybeAuthId'
+  trail        <- widgetToPageContent $ compNaviTrail comp path >> loginWidget maybeAuthId'
+  children     <- widgetToPageContent $ compNaviChildren comp path
   withUrlRenderer $(hamletFile "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/Impl/newlayout.hamlet")
 
 loginWidget :: Maybe (AuthId CBGWebSite) -> Widget

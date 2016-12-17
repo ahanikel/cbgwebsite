@@ -11,13 +11,14 @@ import qualified Data.Text as T
 import           Data.String (IsString(..))
 
 data Component a = Component
-                   { compName       :: T.Text
-                   , compNaviName   :: T.Text
-                   , compNavigation :: [T.Text] -> WidgetT a IO ()
-                   , compRepository :: Repository
+                   { compName          :: T.Text
+                   , compNaviName      :: T.Text
+                   , compNaviTrail     :: [T.Text] -> WidgetT a IO ()
+                   , compNaviChildren  :: [T.Text] -> WidgetT a IO ()
+                   , compRepository    :: Repository
                    }
                  | ComponentName
-                   { compName       :: T.Text
+                   { compName          :: T.Text
                    }
 
 instance Eq (Component a) where

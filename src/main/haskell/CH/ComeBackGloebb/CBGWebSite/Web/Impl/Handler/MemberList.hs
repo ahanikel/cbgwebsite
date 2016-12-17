@@ -151,3 +151,6 @@ auditTrail _ = do
       <li role=presentation .active>
         <a href=@{MemberListR}>Mitgliederliste
   |]
+
+naviChildren :: [T.Text] -> Widget
+naviChildren _ = return ()

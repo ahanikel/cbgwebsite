@@ -300,3 +300,6 @@ galleryNavigation path = do
               <li .collapsed>
                   <a href=@{GalleryR gname} title=#{gname}>#{gname}
           |]
+
+naviChildren :: [T.Text] -> Widget
+naviChildren _ = return ()

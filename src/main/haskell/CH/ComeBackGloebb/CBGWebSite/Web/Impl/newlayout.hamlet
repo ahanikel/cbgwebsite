@@ -16,23 +16,26 @@ $doctype 5
       <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js">
       <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js">
     <![endif]-->
+    <script src=@{StaticR jquery_js}>
+    <script src=@{StaticR bootstrap_js}>
+    <script src=@{StaticR ie10_viewport_bug_workaround_js}>
     ^{pageHead pageContent}
   <body>
     <nav .navbar .navbar-fixed-top>
       <div .container-fluid>
         <div .row>
           <div .navbar-header>
-            <a .navbar-brand href=#>
+            <a .navbar-brand href=@{RootR}>
               <img #cbg-logo .img-responsive src=@{StaticR cbg_logo_png}>
           <div .col-md-offset-2>
             <div .col-md-10>
               <div #navbar .navbar-collapse>
                 ^{pageBody trail}
-    <div .container>
-      ^{pageBody pageContent}
-      <hr>
-      <footer>
-        <p>© 2016 Come Back Glöbb
-    <script src=@{StaticR jquery_js}>
-    <script src=@{StaticR bootstrap_js}>
-    <script src=@{StaticR ie10_viewport_bug_workaround_js}>
+    <div #content-area .container-fluid>
+      <div .row>
+        <div #sidebar .col-md-2>
+          ^{pageBody children}
+        <div #main-content .col-md-7>
+          ^{pageBody pageContent}
+        <div .col-md-3>
+          <img #cbg-sticker .img-responsive src="/static/assets/images/gloebb-gross.png">

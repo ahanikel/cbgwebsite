@@ -61,6 +61,7 @@ layout path widget = do
   pageContent  <- widgetToPageContent widget
   maybeAuthId' <- maybeAuthId
   trail        <- widgetToPageContent $ auditTrail path
+  children     <- widgetToPageContent $ return ()
   withUrlRenderer $(hamletFile "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/Impl/newlayout.hamlet")
 
 auditTrail ("members" : rest) = do

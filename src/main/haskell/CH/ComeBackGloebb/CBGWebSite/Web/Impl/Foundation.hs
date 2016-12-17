@@ -227,4 +227,5 @@ defaultLayout' widget = do pageContent     <- widgetToPageContent widget
                            let maybeAuthId' = Nothing :: Maybe (AuthId CBGWebSite)
                            navi            <- widgetToPageContent $ return ()
                            trail           <- widgetToPageContent $ return ()
+                           children        <- widgetToPageContent $ return ()
                            withUrlRenderer $(hamletFile "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/Impl/newlayout.hamlet")

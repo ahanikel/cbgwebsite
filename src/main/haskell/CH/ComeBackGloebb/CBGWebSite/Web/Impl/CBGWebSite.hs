@@ -52,22 +52,27 @@ mkFoundation dbPool = do
         [ Component "Content"
                     "Content"
                     Content.auditTrail
+                    Content.naviChildren
                     (Repository "data/content")
         , Component "Members"
                     "Mitglieder"
                     MemberList.auditTrail
+                    MemberList.naviChildren
                     (Repository "data/members")
         , Component "Calendar"
                     "Kalender"
                     Calendar.auditTrail
+                    Calendar.naviChildren
                     (Repository "data/calendar")
         , Component "Galleries"
                     "Fotos"
                     Galleries.auditTrail
+                    Galleries.naviChildren
                     (Repository "data/galleries")
         , Component "Assets"
                     "Dateien"
                     Assets.auditTrail
+                    Assets.naviChildren
                     (Repository "data/assets")
         ]
   clientId        <- T.pack <$> readFile "google.clientId"
