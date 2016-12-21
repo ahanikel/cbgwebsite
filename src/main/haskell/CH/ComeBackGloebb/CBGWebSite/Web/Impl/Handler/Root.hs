@@ -10,17 +10,35 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE ViewPatterns               #-}
 
-module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Root where
+module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Root
+  ( getRootR
+  , getFavR
+  , getMembersR
+  , auditTrail
+  , naviChildren
+  )
+where
 
 -- CBG
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Foundation
+import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout
+import CH.ComeBackGloebb.CBGWebSite.Web.Component
 
 -- Yesod
 import Yesod
 import Yesod.Auth
 import Text.Hamlet
 
+import           Data.List                                          (find)
 import qualified Data.Text as T
+
+component :: Handler (Component CBGWebSite)
+component = do
+  cs <- components <$> getYesod
+  let mc = find (== "Root") cs
+  case mc of
+    Nothing -> fail "Component not found."
+    Just c  -> return c
 
 getRootR :: Handler ()
 getRootR = redirect ("/content" :: String)
@@ -29,7 +47,7 @@ getFavR :: Handler ()
 getFavR = sendFile "image/png" "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static/cbg-favicon.png"
 
 getMembersR :: Handler Html
-getMembersR = layout ["members"] [whamlet|
+getMembersR = rootLayout ["members"] [whamlet|
   <h1>Willkommen auf der neuen Come Back Glöbb Homepage!
   <p>Auf den ersten Blick sieht alles so aus wie vorher, aber das täuscht :-)
   <p>Vorteile:
@@ -56,22 +74,23 @@ getMembersR = layout ["members"] [whamlet|
        <li>Das neue Passwort zwei mal eingeben (kann auch dasselbe wie das alte sein). Fertig!
 |]
 
-layout :: [T.Text] -> Widget -> Handler Html
-layout path widget = do
-  pageContent  <- widgetToPageContent widget
-  maybeAuthId' <- maybeAuthId
-  trail        <- widgetToPageContent $ auditTrail path
-  children     <- widgetToPageContent $ return ()
-  withUrlRenderer $(hamletFile "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/Impl/newlayout.hamlet")
-
 auditTrail ("members" : rest) = do
   [whamlet|
-    <ul .nav .navbar-nav>
-      <li>
+    <ul .nav .nav-pills .navbar-nav>
+      <li role=presentation .active>
         <a href=@{RootR}>Startseite
-      <li>
+      <li role=presentation .active>
         <a href=@{MembersR}>Mitglieder
   |]
+
+naviChildren :: [T.Text] -> Widget
+naviChildren _ = return ()
+
+rootLayout :: [T.Text] -> Widget -> Handler Html
+rootLayout path body = do
+  comp <- component
+  layout comp path body
+
 
 --    <div .jumbotron>
 --      <div .container>

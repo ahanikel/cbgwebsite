@@ -15,7 +15,7 @@ module CH.ComeBackGloebb.CBGWebSite.Web.Impl.CBGWebSite (cbgWebSite) where
 -- CBG
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Foundation
 import CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
-import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Root
+import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Root as Root
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Assets as Assets
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Calendar as Calendar
 import CH.ComeBackGloebb.CBGWebSite.Web.Impl.Handler.Content as Content
@@ -74,7 +74,11 @@ mkFoundation dbPool = do
                     Assets.auditTrail
                     Assets.naviChildren
                     (Repository "data/assets")
-        ]
+        , ComponentNoRepo "Root"
+                    "Root"
+                    Root.auditTrail
+                    Root.naviChildren
+       ]
   clientId        <- T.pack <$> readFile "google.clientId"
   clientSecret    <- T.pack <$> readFile "google.clientSecret"
   return CBGWebSite {..}

@@ -17,6 +17,12 @@ data Component a = Component
                    , compNaviChildren  :: [T.Text] -> WidgetT a IO ()
                    , compRepository    :: Repository
                    }
+                 | ComponentNoRepo
+                   { compName          :: T.Text
+                   , compNaviName      :: T.Text
+                   , compNaviTrail     :: [T.Text] -> WidgetT a IO ()
+                   , compNaviChildren  :: [T.Text] -> WidgetT a IO ()
+                   }
                  | ComponentName
                    { compName          :: T.Text
                    }

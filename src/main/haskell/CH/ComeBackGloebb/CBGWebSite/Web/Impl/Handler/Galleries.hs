@@ -49,6 +49,20 @@ component' = do
     Nothing -> fail "Component not found."
     Just c  -> return c
 
+galleryCss :: Widget
+galleryCss = toWidget
+  [cassius|
+    .galleryimg
+      height: 320px !important
+      padding: 20px
+      img
+        max-height: 240px !important
+    .new
+      background-color: light-grey
+    .caption
+      vertical-align: bottom
+  |]
+
 getGalleriesR :: Handler TypedContent
 getGalleriesR = selectRep $
   provideRep $ do
@@ -60,15 +74,24 @@ getGalleriesR = selectRep $
         $logError $ T.pack $ show e
         fail "Internal error while trying to list galleries."
       Right galleries ->
-        layout comp ["galleries"] [whamlet|
-          <table>
-            <tr>
-              <th>Gallery Name
-            $forall gallery <- galleries
-              <tr>
-                <td>
-                  <a href=@{GalleryR (T.pack $ gallery_name gallery)}>#{gallery_name gallery}
+        layout comp ["galleries"] $ do
+        galleryCss
+        [whamlet|
+          <div .content>
+            <div .row>
+              $forall g <- galleries
+                <div .col-md-3>
+                  <div .galleryimg .thumbnail>
+                    <a href=@{GalleryR $ gname g}>
+                      $case gallery_images g
+                        $of []
+                        $of is
+                          <img src=@{ImageThumbR (gname g) (T.pack $ head is)} alt=#{gname g}>
+                          <div .caption>
+                            <h4>#{gname g}
         |]
+  where
+    gname = T.pack . gallery_name
 
 getGalleryR :: T.Text -> Handler TypedContent
 getGalleryR gname = selectRep $
@@ -81,15 +104,20 @@ getGalleryR gname = selectRep $
         $logError $ T.pack $ show e
         fail "Internal error while trying to list galleries."
       Right gallery ->
-        layout comp ["gallery", gname] [whamlet|
+        layout comp ["gallery", gname] $ do
+        galleryCss
+        [whamlet|
           <h1>#{gname}
-          <div .row>
-              $forall iname <- map T.pack $ gallery_images gallery
-                  <div .galleryimg>
+          <div .content>
+            <div .row>
+             $forall iname <- map T.pack $ gallery_images gallery
+              <div .col-md-3>
+                  <div .galleryimg .thumbnail>
                       <a href=@{GalleryImageR gname iname}>
-                          <img src=@{ImageThumbR gname iname} alt=#{iname} width=171>
-              <div .galleryimg>
-                  <input #fileinput type=file multiple=multiple accept="image/*">
+                          <img src=@{ImageThumbR gname iname} alt=#{iname}>
+             <div .col-md-3>
+              <div .galleryimg .new>
+                <input #fileinput type=file multiple=multiple accept="image/*">
           <script>
               function uploadFile(file) {
                   var xhr = new XMLHttpRequest();
@@ -302,4 +330,19 @@ galleryNavigation path = do
           |]
 
 naviChildren :: [T.Text] -> Widget
-naviChildren _ = return ()
+naviChildren path = do
+  repo            <- compRepository <$> component'
+  eitherGalleries <- liftIO $ runEitherT $ list_galleries repo
+  case eitherGalleries of
+    Left ioe -> do
+      $logError $ T.pack $ show (map T.unpack path) ++ "/galleryNavigation: " ++ show (ioe :: IOException)
+      return ()
+    Right galleries ->
+      [whamlet|
+        <ul .nav .nav-pills .nav-stacked>
+          $forall g <- galleries
+            <li role=presentation .active>
+              <a href=@{GalleryR $ gname g} title=#{gname g}>#{gname g}
+      |]
+  where
+    gname g = T.pack $ gallery_name g
