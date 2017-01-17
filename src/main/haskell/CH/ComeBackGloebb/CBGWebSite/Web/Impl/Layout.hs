@@ -60,6 +60,17 @@ css = [cassius|
   #cbg-sticker
     width: 300px
     padding: 20px
+  #calendar
+    .day
+      height: 100px
+      width: 80px
+      border: 1px solid grey
+      border-radius: 4px
+      float: left
+      margin: 10px
+      padding: 5px
+      p
+        background-color: yellow
 |]
 
 htmlHead pageContent = [hamlet|

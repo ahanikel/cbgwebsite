@@ -64,13 +64,13 @@ getMemberCalendarMR year month = do
       layout comp [T.pack $ show year, T.pack $ show month]
           [whamlet|
             <div .row>
-                <div .col-md-8 .col-md-offset-1>
+                <div .col-sm-10 .col-sm-offset-1>
                     <div #calendar>
                         $forall week <- calWithEvents
                             <div .row>
-                                $forall day <- week
-                                    <div .col-md-1>
-                                        <div .thumbnail>#{dayno $ fst day}
+                                <div .col-sm-12 .col-md-12>
+                                    $forall day <- week
+                                        <div .day>#{dayno $ fst day}
                                             $forall event <- snd day
                                                 <p>#{evTitle event}
           |]
