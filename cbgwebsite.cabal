@@ -14,10 +14,11 @@ Executable CBGWebSite
   Main-Is: Main.hs
   Hs-Source-Dirs: src/app/haskell
   Default-Language: Haskell2010
-  ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N -with-rtsopts=-T
+  ghc-options: -O2
+               -- -threaded -rtsopts -with-rtsopts=-N -with-rtsopts=-T
   Build-Depends: base
                , cbgwebsite
-               , ekg
+               --, ekg
 
 Library
   Hs-Source-Dirs: src/main/haskell

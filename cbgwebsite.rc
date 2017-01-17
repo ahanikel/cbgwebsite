@@ -1,0 +1,29 @@
+#!/bin/sh
+
+# PROVIDE: cbgwebsite
+
+. /etc/rc.subr
+
+name=cbgwebsite
+rcvar=cbgwebsite_enable
+pidfile=/var/run/cbgwebsite.pid
+procname=/bin/sh
+
+start_cmd=${name}_start
+stop_cmd=${name}_stop
+
+cbgwebsite_start () {
+	exec 5> ${pidfile}
+	/usr/bin/su cbg -c '/home/cbg/run & echo $! >&5'
+}
+
+cbgwebsite_stop () {
+	run_pid=$(pgrep -f ./run)
+	kill $run_pid
+	pkill CBGWebSite
+	rm -f ${pidfile}
+}
+
+load_rc_config $name
+run_rc_command "$1"
+
