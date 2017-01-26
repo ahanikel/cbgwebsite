@@ -28,6 +28,7 @@ import Text.Hamlet
 -- other imports
 import           Control.Monad                                      (liftM)
 import           Control.Monad.Trans.Either                         (runEitherT)
+import           Data.ByteString.Lazy                               (toStrict)
 import qualified Data.ByteString.UTF8                               as U8
 import           Data.Conduit
 import qualified Data.Conduit.Binary                                as CB
@@ -78,7 +79,7 @@ postAssetR (ContentPath path) = do
            bytes        <- runConduit $ fileSource file $$ CB.sinkLbs
            eitherResult <- liftIO $ runEitherT $ do
              now <- liftIO getCurrentTime
-             assetWrite repo (map T.unpack (path ++ [name])) (T.unpack name) (T.unpack type') (T.unpack userName) now (Just bytes)
+             assetWrite repo (map T.unpack (path ++ [name])) (T.unpack name) (T.unpack type') (T.unpack userName) now (Just $ toStrict bytes)
            case eitherResult of
              Left e -> do
                $logError $ T.pack $ show e
@@ -274,8 +275,8 @@ getTrail' repo path = do
     getTrail node
   return $ either (const []) id eitherNodes
 
-naviChildren :: [T.Text] -> Widget
-naviChildren (_ : path) = do
+naviChildren :: [T.Text] -> Maybe Widget
+naviChildren (_ : path) = Just $ do
   repo <- compRepository <$> component'
   trail <- getTrail' repo path
   let children = map Tree.rootLabel $ Tree.subForest $ navTree $ last trail

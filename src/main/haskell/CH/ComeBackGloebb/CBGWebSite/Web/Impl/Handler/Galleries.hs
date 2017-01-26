@@ -28,6 +28,7 @@ import Text.Hamlet
 import           Control.Exception                                  (IOException)
 import           Control.Monad.Trans.Either                         (runEitherT)
 import qualified Data.ByteString.UTF8                               as U8
+import           Data.ByteString.Lazy                               (toStrict)
 import           Data.Conduit
 import qualified Data.Conduit.Binary                                as CB
 import           Data.List (elemIndex, find)
@@ -260,7 +261,7 @@ postUploadImageR gname = do
                                        (T.unpack iname)
                                        (T.unpack type')
                                        (T.unpack userName)
-                                       bytes
+                                       (toStrict bytes)
             case eitherResult of
               Left e -> do
                 $logError $ T.pack $ show e
@@ -329,8 +330,8 @@ galleryNavigation path = do
                   <a href=@{GalleryR gname} title=#{gname}>#{gname}
           |]
 
-naviChildren :: [T.Text] -> Widget
-naviChildren path = do
+naviChildren :: [T.Text] -> Maybe Widget
+naviChildren path = Just $ do
   repo            <- compRepository <$> component'
   eitherGalleries <- liftIO $ runEitherT $ list_galleries repo
   case eitherGalleries of

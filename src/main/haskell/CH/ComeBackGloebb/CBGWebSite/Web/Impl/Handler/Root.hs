@@ -83,8 +83,8 @@ auditTrail ("members" : rest) = do
         <a href=@{MembersR}>Mitglieder
   |]
 
-naviChildren :: [T.Text] -> Widget
-naviChildren _ = return ()
+naviChildren :: [T.Text] -> Maybe Widget
+naviChildren _ = Nothing
 
 rootLayout :: [T.Text] -> Widget -> Handler Html
 rootLayout path body = do

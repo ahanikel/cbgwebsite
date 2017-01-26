@@ -23,8 +23,8 @@ import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
 import           Control.Monad                                     (liftM,
                                                                     unless,
                                                                     when)
-import qualified Data.ByteString.Lazy                              as BL
-import qualified Data.ByteString.Lazy.UTF8                         as UL8
+import qualified Data.ByteString                                   as BS
+import qualified Data.ByteString.UTF8                              as U8
 import           Data.DateTime                                     (DateTime, fromSqlString,
                                                                     getCurrentTime,
                                                                     startOfTime,
@@ -69,7 +69,7 @@ instance Persistent Gallery where
   readItem repo gname = do
     gnode   <- getNode repo $ urlFromString gname
     inames  <- getChildNodeNames gnode
-    sortKey <- liftM UL8.toString $ getPropertyWithDefault gnode "sortKey" ""
+    sortKey <- liftM U8.toString $ getPropertyWithDefault gnode "sortKey" ""
     return $ Gallery repo gname (sort inames) sortKey
 
   deleteItem g = deleteNode $ toNode g
@@ -86,10 +86,10 @@ instance Persistent Image where
   readItem repo path = do
     inode        <- getNode repo (urlFromString path)
     let name      = node_name inode
-    type'        <- liftM UL8.toString $ getProperty inode "type"
+    type'        <- liftM U8.toString $ getProperty inode "type"
     let gallery   = head $ node_path inode
-    uploadedBy   <- liftM UL8.toString $ getProperty inode "uploadedBy"
-    uploadedDate <- liftM (fromMaybe startOfTime . fromSqlString . UL8.toString) $ getProperty inode "uploadedDate"
+    uploadedBy   <- liftM U8.toString $ getProperty inode "uploadedBy"
+    uploadedDate <- liftM (fromMaybe startOfTime . fromSqlString . U8.toString) $ getProperty inode "uploadedDate"
     return $ Image repo name type' gallery uploadedBy uploadedDate
 
   deleteItem i = do
@@ -129,7 +129,7 @@ gallery_delete :: Repository -> String -> RepositoryContext ()
 gallery_delete repo name = (readItem repo name :: RepositoryContext Gallery) >>= deleteItem
 
 --exported
-gallery_set_image :: Gallery -> String -> String -> BL.ByteString -> String -> DateTime -> RepositoryContext Gallery
+gallery_set_image :: Gallery -> String -> String -> BS.ByteString -> String -> DateTime -> RepositoryContext Gallery
 gallery_set_image gallery name type' bytes uploadedBy uploadedDate = do
   let image = Image (gallery_repo gallery)
                     name
@@ -190,7 +190,7 @@ image_small :: Image -> FilePath
 image_small image = getImagePropertyPath image image_small_name
 
 --exported
-image_write :: Repository -> String -> String -> String -> String -> BL.ByteString -> RepositoryContext ()
+image_write :: Repository -> String -> String -> String -> String -> BS.ByteString -> RepositoryContext ()
 image_write repo gname iname contentType uploadedBy bytes = do
     now <- check getCurrentTime
     writeItem $ Image repo iname contentType gname uploadedBy now

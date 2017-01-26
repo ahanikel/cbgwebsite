@@ -14,8 +14,8 @@ import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 
 -- other
 import           Control.Monad                                     (liftM)
-import qualified Data.ByteString.Lazy                              as BL
-import qualified Data.ByteString.Lazy.UTF8                         as UL8
+import qualified Data.ByteString                                   as BS
+import qualified Data.ByteString.UTF8                              as U8
 import           Data.DateTime                                     (DateTime, fromSqlString,
                                                                     startOfTime,
                                                                     toSqlString)
@@ -38,17 +38,17 @@ instance Persistent Asset where
   writeItem a @ Asset {..} = do
     let n = toNode a
     writeNode n
-    writeProperty n "type"         $ UL8.fromString assetType
-    writeProperty n "uploadedBy"   $ UL8.fromString assetUploadedBy
-    writeProperty n "uploadedDate" $ UL8.fromString $ toSqlString assetUploadedDate
+    writeProperty n "type"         $ U8.fromString assetType
+    writeProperty n "uploadedBy"   $ U8.fromString assetUploadedBy
+    writeProperty n "uploadedDate" $ U8.fromString $ toSqlString assetUploadedDate
 
   deleteItem = deleteNode . toNode
 
   readItem repo path = do
     node         <- getNode repo $ urlFromString path
-    type'        <- liftM UL8.toString $ getPropertyWithDefault node "type" "application/x-directory"
-    uploadedBy   <- liftM UL8.toString $ getPropertyWithDefault node "uploadedBy" "nobody"
-    uploadedDate <- liftM UL8.toString $ getPropertyWithDefault node "uploadedDate" "1970-01-01T00:00:00"
+    type'        <- liftM U8.toString $ getPropertyWithDefault node "type" "application/x-directory"
+    uploadedBy   <- liftM U8.toString $ getPropertyWithDefault node "uploadedBy" "nobody"
+    uploadedDate <- liftM U8.toString $ getPropertyWithDefault node "uploadedDate" "1970-01-01T00:00:00"
     return $ Asset (node_repo node)
                    (node_path node)
                    (node_name node)
@@ -71,7 +71,7 @@ assetBlob :: Asset -> String
 assetBlob asset = root (assetRepo asset) </> urlToFilePath (assetPath asset) </> "asset.blob.p"
 
 -- exported
-assetWrite :: Repository -> [String] -> String -> String -> String -> DateTime -> Maybe BL.ByteString -> RepositoryContext ()
+assetWrite :: Repository -> [String] -> String -> String -> String -> DateTime -> Maybe BS.ByteString -> RepositoryContext ()
 assetWrite repo path name type' uploadedBy uploadedDate blob = do
   let asset = Asset repo path name type' uploadedBy uploadedDate
       node  = toNode asset

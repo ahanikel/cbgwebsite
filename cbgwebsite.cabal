@@ -55,6 +55,7 @@ Library
                , conduit-extra
                , containers
                , datetime
+               , deepseq
                , directory
                , either
                , filepath

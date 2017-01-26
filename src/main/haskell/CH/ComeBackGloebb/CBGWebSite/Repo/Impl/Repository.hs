@@ -41,6 +41,7 @@ import           Control.Monad                                (filterM, liftM)
 import           Control.Monad.Trans.Either                   (EitherT, left)
 import           Control.Monad.Trans.Either                   (runEitherT)
 import qualified Data.ByteString.Lazy                         as BL
+import qualified Data.ByteString                              as BS
 import           Data.List                                    (intercalate,
                                                                isSuffixOf)
 import           System.Directory                             (createDirectoryIfMissing,
@@ -144,11 +145,11 @@ readPropertyNames path = readFiles           >>=
                                           return $ exists && isProp
 
 -- exported
-getProperty :: Node -> String -> RepositoryContext BL.ByteString
-getProperty node pname = check $ BL.readFile $ getPropertyPath node pname
+getProperty :: Node -> String -> RepositoryContext BS.ByteString
+getProperty node pname = check $ BS.readFile $ getPropertyPath node pname
 
 -- exported
-getPropertyWithDefault :: Node -> String -> BL.ByteString -> RepositoryContext BL.ByteString
+getPropertyWithDefault :: Node -> String -> BS.ByteString -> RepositoryContext BS.ByteString
 getPropertyWithDefault node pname def = do eProp <- check $ runEitherT $ getProperty node pname
                                            return $ either (const def) id eProp
 
@@ -164,8 +165,8 @@ getPropertyPath node pname = root repo </> path </> fileName
         fileName = pathCompFromString pname ++ ".p"
 
 -- exported
-writeProperty :: Node -> String -> BL.ByteString -> RepositoryContext ()
-writeProperty node pname bytes = check $ BL.writeFile (getPropertyPath node pname) bytes
+writeProperty :: Node -> String -> BS.ByteString -> RepositoryContext ()
+writeProperty node pname bytes = check $ BS.writeFile (getPropertyPath node pname) bytes
 
 -- exported
 deleteProperty :: Node -> String -> RepositoryContext ()

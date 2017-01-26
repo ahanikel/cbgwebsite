@@ -30,16 +30,18 @@ layout comp path widget = do
   pageContent  <- widgetToPageContent (widget >> toWidget css)
   maybeAuthId' <- maybeAuthId
   trail        <- widgetToPageContent $ compNaviTrail comp path >> loginWidget maybeAuthId'
-  children     <- widgetToPageContent $ compNaviChildren comp path
+  children     <- case compNaviChildren comp path of
+    Nothing -> return Nothing
+    Just c  -> widgetToPageContent c >>= return . Just
   withUrlRenderer $ template trail children pageContent
 
-template trail children pageContent = [hamlet|
+template trail mChildren pageContent = [hamlet|
 $doctype 5
 <html lang=en>
   <head>
     ^{htmlHead pageContent}
   <body>
-    ^{htmlBody trail children pageContent}
+    ^{htmlBody trail mChildren pageContent}
 |]
 
 css = [cassius|
@@ -94,7 +96,7 @@ htmlHead pageContent = [hamlet|
     ^{pageHead pageContent}
 |]
 
-htmlBody trail children pageContent = [hamlet|
+htmlBody trail mChildren pageContent = [hamlet|
     <div .container-fluid>
       <div .header .clearfix>
         <nav .navbar>
@@ -104,10 +106,15 @@ htmlBody trail children pageContent = [hamlet|
           ^{pageBody trail}
     <div #content-area .container-fluid>
       <div .row>
-        <div #sidebar .col-md-2>
-          ^{pageBody children}
-        <div #main-content .col-md-7>
-          ^{pageBody pageContent}
+        $case mChildren
+          $of Just children
+            <div #sidebar .col-md-2>
+              ^{pageBody children}
+            <div #main-content .col-md-7>
+              ^{pageBody pageContent}
+          $of Nothing
+            <div #main-content .col-md-9>
+              ^{pageBody pageContent}
         <div .col-md-3>
           <img #cbg-sticker .img-responsive src="/static/assets/images/gloebb-gross.png">
 |]

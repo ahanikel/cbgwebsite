@@ -27,7 +27,7 @@ import Text.Hamlet
 -- other imports
 import           Control.Monad                                      (liftM)
 import           Control.Monad.Trans.Either                         (runEitherT)
-import qualified Data.ByteString.Lazy.UTF8                          as UL8
+import qualified Data.ByteString.UTF8                               as U8
 import           Data.List                                          (find, sort)
 import           Data.Maybe                                         (fromMaybe)
 import qualified Data.Text                                          as T
@@ -60,7 +60,7 @@ getContentR (ContentPath pieces) = do
     case eitherNode of
         Left _ -> notFound
         Right node -> do
-          res <- liftIO $ runEitherT $ liftM UL8.toString $ getProperty node "text.html"
+          res <- liftIO $ runEitherT $ liftM U8.toString $ getProperty node "text.html"
           prop <- either (fail.show) return res
           toWidget $ preEscapedToMarkup prop
 
@@ -80,7 +80,7 @@ getEditContentR (ContentPath pieces) = do
         Right node -> do
           let propNames   = node_props node
           res            <- liftIO $ runEitherT $ mapM (getProperty node) (trace (show propNames) propNames)
-          propValues     <- either (fail . show) (mapM (return . UL8.toString)) res
+          propValues     <- either (fail . show) (mapM (return . U8.toString)) res
           let props       = zip propNames propValues :: [(String, String)]
               textHtml    = snd <$> find ((== "text.html") . fst) props
               contentBody = toWidget $ toHtml $ fromMaybe "" textHtml
@@ -131,7 +131,7 @@ postEditContentR (ContentPath pieces) = do
             return node
         Right node -> return node
     body <- runInputPost $ ireq textField "body"
-    res <- liftIO $ runEitherT $ writeProperty node "text.html" (UL8.fromString $ T.unpack body)
+    res <- liftIO $ runEitherT $ writeProperty node "text.html" (U8.fromString $ T.unpack body)
     case res of
       Left err -> fail $ show err
       Right () -> return ()
@@ -315,9 +315,9 @@ getTrail' repo path = do
     getTrail node
   return $ either (const []) id eitherNodes
 
-naviChildren :: [T.Text] -> Widget
-naviChildren ("edit" : "content" : rest) = naviChildren' EditContentR rest
-naviChildren ("content"          : rest) = naviChildren' ContentR rest
+naviChildren :: [T.Text] -> Maybe Widget
+naviChildren ("edit" : "content" : rest) = Just $ naviChildren' EditContentR rest
+naviChildren ("content"          : rest) = Just $ naviChildren' ContentR rest
 
 naviChildren' :: (ContentPath -> Route CBGWebSite) -> [T.Text] -> Widget
 naviChildren' linkFunc path = do

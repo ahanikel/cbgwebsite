@@ -152,5 +152,5 @@ auditTrail _ = do
         <a href=@{MemberListR}>Mitgliederliste
   |]
 
-naviChildren :: [T.Text] -> Widget
-naviChildren _ = return ()
+naviChildren :: [T.Text] -> Maybe Widget
+naviChildren _ = Nothing
