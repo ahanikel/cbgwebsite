@@ -81,24 +81,24 @@ instance Persistent Event where
           repo = evRepo event
   
 instance ToJSON Event where
-    toJSON Event {..} = object [ "uuid"        .= show                 evUUID
-                               , "title"       .=                      evTitle
-                               , "startDate"   .=          toSqlString evStartDate
-                               , "endDate"     .= maybe "" toSqlString evEndDate
-                               , "description" .=                      evDescription
-                               , "location"    .=                      evLocation
+    toJSON Event {..} = object [ "evUUID"        .= show                 evUUID
+                               , "evTitle"       .=                      evTitle
+                               , "evStartDate"   .=          toSqlString evStartDate
+                               , "evEndDate"     .= maybe "" toSqlString evEndDate
+                               , "evDescription" .=                      evDescription
+                               , "evLocation"    .=                      evLocation
                                ]
 
 instance FromJSON Event where
   parseJSON (Object v) =
     Event
-      <$> (read <$> T.unpack <$> v .: "uuid")
+      <$> (read <$> T.unpack <$> v .: "evUUID")
       <*> (pure $ Repository "")
-      <*> v .: "title"
-      <*> v .: "startDate"
-      <*> v .: "endDate"
-      <*> v .: "description"
-      <*> v .: "location"
+      <*> v .: "evTitle"
+      <*> v .: "evStartDate"
+      <*> v .: "evEndDate"
+      <*> v .: "evDescription"
+      <*> v .: "evLocation"
       
 fromNode :: Node -> RepositoryContext Event
 fromNode n = readItem (node_repo n) (urlToString $ node_path n)
