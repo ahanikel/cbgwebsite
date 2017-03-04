@@ -28,8 +28,9 @@ import Text.Hamlet
 import           Control.Monad                                      (liftM)
 import           Control.Monad.Trans.Either                         (runEitherT)
 import qualified Data.ByteString.UTF8                               as U8
-import           Data.List                                          (find, sort)
+import           Data.List                                          (find, sort, sortBy)
 import           Data.Maybe                                         (fromMaybe)
+import           Data.Ord                                           (comparing)
 import qualified Data.Text                                          as T
 import qualified Data.Tree                                          as Tree
 import Debug.Trace
@@ -130,12 +131,20 @@ postEditContentR (ContentPath pieces) = do
             _ <- liftIO $ runEitherT $ writeNode node
             return node
         Right node -> return node
-    body <- runInputPost $ ireq textField "body"
-    res <- liftIO $ runEitherT $ writeProperty node "text.html" (U8.fromString $ T.unpack body)
+    pagebody <- runInputPost $ ireq textField "body"
+    reqbody <- filter ((/= "body") . fst) <$> fst <$> runRequestBody
+    res <- liftIO $ runEitherT $ do
+      writeProperty node "text.html" (U8.fromString $ T.unpack pagebody)
+      mapM_ (\(pname, pvalue) -> writeProperty node (T.unpack pname) (U8.fromString $ T.unpack pvalue)) $ makePairs reqbody
     case res of
       Left err -> fail $ show err
       Right () -> return ()
     withUrlRenderer [hamlet||]
+  where
+    -- [("props[0][name]","title"),("props[0][value]","Some title")] -> [("title", "Some title")]
+    makePairs params = pairs $ map snd $ sortBy (comparing fst) params
+    pairs [] = []
+    pairs (one : two : rest) = (one, two) : pairs rest
 
 contentLayout :: [T.Text] -> Widget -> Handler Html
 contentLayout path body = do
