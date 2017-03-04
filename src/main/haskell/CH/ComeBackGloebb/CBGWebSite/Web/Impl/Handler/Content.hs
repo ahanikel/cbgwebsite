@@ -300,19 +300,9 @@ auditTrail' linkFunc repo path = do
   where
     encodeTrail n = do
       let ne = navSelf n
-          nces :: [NavigationEntry]
-          nces = map Tree.rootLabel $ Tree.subForest $ navTree n
       [whamlet|
-        <li role=presentation .active .dropdown>
-          <a href=# .dropdown-toggle data-toggle=dropdown role=button aria-haspopup=true aria-expanded=false title=#{neTitle ne}>
-              #{neTitle ne}
-              $if not $ null nces
-                <span .caret>
-          $if not $ null nces
-            <ul .dropdown-menu>
-              $forall nce <- nces
-                <li>
-                  <a href=@{url linkFunc nce}>#{neTitle nce}
+        <li role=presentation .active>
+          <a href=@{url linkFunc ne} role=button title=#{neTitle ne}>#{neTitle ne}
       |]
 
 url linkFunc = linkFunc . ContentPath . (map T.pack) . neURL
