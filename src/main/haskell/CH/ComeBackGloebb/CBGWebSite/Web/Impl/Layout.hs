@@ -45,6 +45,17 @@ $doctype 5
 |]
 
 css = [cassius|
+  #main-content
+    padding-left: 3em
+    padding-right: 2em
+    h1
+      margin-top: 2ex
+    h2
+      margin-top: 2ex
+      margin-bottom: 2ex
+    h3
+      margin-top: 2ex
+      margin-bottom: 2ex
   .navbar
     background-color: dodgerblue
     margin-top: 20px
@@ -55,9 +66,13 @@ css = [cassius|
       margin-left: 20px
       vertical-align: middle
       padding-top: 40px
+      padding-left: 60px
       padding-right: 20px
   #sidebar
+    padding-top: 2ex
     li
+      padding-left: 2em
+      padding-right: 2em
       margin-bottom: 2px
   #cbg-sticker
     width: 300px
