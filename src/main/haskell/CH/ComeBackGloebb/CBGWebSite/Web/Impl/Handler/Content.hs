@@ -323,7 +323,10 @@ naviChildren' :: (ContentPath -> Route CBGWebSite) -> [T.Text] -> Widget
 naviChildren' linkFunc path = do
   repo <- compRepository <$> component'
   trail <- getTrail' repo path
-  let children = map Tree.rootLabel $ Tree.subForest $ navTree $ last trail
+  let children =
+        case trail of
+          [] -> []
+          _  -> map Tree.rootLabel $ Tree.subForest $ navTree $ last trail
   [whamlet|
     <ul .nav .nav-pills .nav-stacked>
       $forall cld <- children
