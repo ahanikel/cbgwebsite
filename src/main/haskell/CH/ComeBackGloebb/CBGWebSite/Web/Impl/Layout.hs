@@ -10,7 +10,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE ViewPatterns               #-}
 
-module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout (layout) where
+module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout (layout, actionDialog) where
 
 -- CBG
 import CH.ComeBackGloebb.CBGWebSite.Web.Component
@@ -25,6 +25,7 @@ import Text.Cassius
 -- other imports
 import qualified Data.Text as T
 
+-- exported
 layout :: Component CBGWebSite -> [T.Text] -> Widget -> Handler Html
 layout comp path widget = do
   pageContent  <- widgetToPageContent (widget >> toWidget css)
@@ -160,3 +161,30 @@ loginWidget maybeAuthId' = do
           <li role=presentation .active>
             <a href=@{AuthR LoginR} title="Mitglieder">Mitglieder
       |]
+
+-- exported
+actionDialog :: T.Text -> Route CBGWebSite -> Route CBGWebSite -> T.Text -> T.Text -> Widget -> Widget -> Widget
+actionDialog id url redirectUrl method title body footer = [whamlet|
+        <div ##{id} .modal .fade>
+          <script>
+            function #{id}(name) {
+              var url = name ? "/" + name : ""
+              \$.ajax(
+                { url: "@{url}" + url
+                , type: "#{method}"
+                , success: function(result) {
+                    window.location.assign("@{redirectUrl}" + url);
+                  }
+                }
+              );
+            }
+          <div .modal-dialog>
+            <div .modal-content>
+              <div .modal-header>
+                <button type=button .close data-dismiss=modal aria-hidden=true>&times;
+                <h4 .modal-title>#{title}
+              <div .modal-body>
+                ^{body}
+              <div .modal-footer>
+                ^{footer}
+|]

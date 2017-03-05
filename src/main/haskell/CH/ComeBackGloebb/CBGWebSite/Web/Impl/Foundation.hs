@@ -84,7 +84,6 @@ mkYesodData "CBGWebSite" [parseRoutes|
     /upload/image/#T.Text             UploadImageR          POST
     /assets/+ContentPath              AssetsR               GET
     /asset/+ContentPath               AssetR                GET POST PUT DELETE
---    /nav/+ContentPath                 NavR                  GET
 |]
 
 instance Yesod CBGWebSite where
@@ -151,7 +150,7 @@ instance Yesod CBGWebSite where
     isAuthorized (UploadImageR _)       True  = isAuthorized MembersR False
 
     -- the assets
-    isAuthorized (AssetR _)             _     = isAuthorized MembersR False
+    isAuthorized (AssetR _)             w     = isAuthorized MemberListR w
     isAuthorized (AssetsR _)            False = isAuthorized MembersR False
 
     -- everything else

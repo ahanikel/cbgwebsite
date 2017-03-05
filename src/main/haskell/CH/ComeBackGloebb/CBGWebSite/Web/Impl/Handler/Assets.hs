@@ -133,31 +133,37 @@ getAssetsR (ContentPath path) = do
     Left e -> do
       $logError $ T.pack $ show e
       fail "Internal error while trying to load asset."
-    Right (thisAsset, assets) -> layout comp ("assets" : path) [whamlet|
-      <div .assets .row>
-        <div #addFolder .modal .fade>
-          <script>
-            function addFolder(name) {
-              \$.ajax(
-                { url: "@{AssetR $ ContentPath path}/" + name
-                , type: "PUT"
-                , success: function(result) {
-                    window.location.assign("@{AssetsR $ ContentPath path}/" + name);
-                  }
-                }
-              );
-            }
-          <div .modal-dialog>
-            <div .modal-content>
-              <div .modal-header>
-                <button type=button .close data-dismiss=modal aria-hidden=true>&times;
-                <h4 .modal-title>Neuer Ordner
-              <div .modal-body>
-                <label for=folderName>Name des neuen Ordners
-                <input #folderName type=text name=folderName>
-              <div .modal-footer>
+    Right (thisAsset, assets) -> do
+      let addFolderDialog =
+            actionDialog
+              "addFolder"
+              (AssetR  $ ContentPath path)
+              (AssetsR $ ContentPath path)
+              "PUT"
+              "Neuer Ordner"
+              [whamlet|
+                <label for=addFolderInput>Name des neuen Ordners
+                <input #addFolderInput type=text name=addFolderInput>
+              |]
+              [whamlet|
                 <button type=button .btn .btn-default data-dismiss=modal>Schliessen
-                <button type=submit .btn .btn-primary onClick=addFolder($('#folderName').val())>Erstellen
+                <button type=submit .btn .btn-primary onClick=addFolder($('#addFolderInput').val())>Erstellen
+              |]
+          deleteFolderDialog =
+            actionDialog
+              "deleteFolder"
+              (AssetR  $ ContentPath path)
+              (AssetsR $ ContentPath parentPath)
+              "DELETE"
+              "Wirklich löschen?"
+              [whamlet|<p>Der aktuell angezeigte Order wird mitsamt Inhalt gelöscht!|]
+              [whamlet|
+                <button type=button .btn .btn-default data-dismiss=modal>Lieber doch nicht
+                <button type=submit .btn .btn-primary onClick=deleteFolder()>Löschen
+              |]
+      layout comp ("assets" : path) [whamlet|
+      <div .assets .row>
+        ^{addFolderDialog}
         <div #uploadFile .modal .fade>
           <div .modal-dialog>
             <div .modal-content>
@@ -173,28 +179,7 @@ getAssetsR (ContentPath path) = do
                 <div .modal-footer>
                   <button type=button .btn .btn-default data-dismiss=modal>Schliessen
                   <button type=submit .btn .btn-primary>Hochladen
-        <div #deleteFolder .modal .fade>
-          <script>
-            function deleteFolder() {
-              \$.ajax(
-                { url: "@{AssetR $ ContentPath path}"
-                , type: "DELETE"
-                , success: function(result) {
-                    window.location.replace("@{AssetsR $ ContentPath $ parentPath}");
-                  }
-                }
-              );
-            }
-          <div .modal-dialog>
-            <div .modal-content>
-              <div .modal-header>
-                <button type=button .close data-dismiss=modal aria-hidden=true>&times;
-                <h4 .modal-title>Wirklich löschen?
-              <div .modal-body>
-                <p>Der aktuell angezeigte Order wird mitsamt Inhalt gelöscht!
-              <div .modal-footer>
-                <button type=button .btn .btn-default data-dismiss=modal>Lieber doch nicht
-                <button type=submit .btn .btn-primary onClick=deleteFolder()>Löschen
+        ^{deleteFolderDialog}
         <div .col-md-8>
           <div .panel .panel-success>
             <div .panel-heading>
