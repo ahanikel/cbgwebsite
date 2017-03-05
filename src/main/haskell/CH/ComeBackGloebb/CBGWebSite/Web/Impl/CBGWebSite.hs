@@ -101,7 +101,7 @@ redirectHttp app req resp | isSecure req = app req resp
 
 redirectHttp _   req resp                = resp $ responseLBS status302
                                            [ ("Location", B.concat
-                                               [ "https://test.comebackgloebb.ch"
+                                               [ "https://comebackgloebb.ch"
                                                , rawPathInfo req
                                                ]
                                              )
