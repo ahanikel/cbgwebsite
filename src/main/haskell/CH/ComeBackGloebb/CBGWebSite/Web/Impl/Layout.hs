@@ -10,7 +10,13 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE ViewPatterns               #-}
 
-module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout (layout, actionDialog) where
+module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout ( layout
+                                                    , actionDialog
+                                                    , fileDialog
+                                                    , successPanel
+                                                    , infoPanel
+                                                    , dangerPanel
+                                                    ) where
 
 -- CBG
 import CH.ComeBackGloebb.CBGWebSite.Web.Component
@@ -163,8 +169,8 @@ loginWidget maybeAuthId' = do
       |]
 
 -- exported
-actionDialog :: T.Text -> Route CBGWebSite -> Route CBGWebSite -> T.Text -> T.Text -> Widget -> Widget -> Widget
-actionDialog id url redirectUrl method title body footer = [whamlet|
+actionDialog :: T.Text -> T.Text -> T.Text -> Route CBGWebSite -> Route CBGWebSite -> Widget -> Widget -> Widget
+actionDialog id title method url redirectUrl body footer = [whamlet|
         <div ##{id} .modal .fade>
           <script>
             function #{id}(name) {
@@ -187,4 +193,48 @@ actionDialog id url redirectUrl method title body footer = [whamlet|
                 ^{body}
               <div .modal-footer>
                 ^{footer}
+|]
+
+-- exported
+fileDialog :: T.Text -> T.Text -> Route CBGWebSite -> Widget -> Widget -> Widget
+fileDialog id title url body footer = [whamlet|
+        <div ##{id} .modal .fade>
+          <div .modal-dialog>
+            <div .modal-content>
+              <form method=post action=@{url} enctype="multipart/form-data">
+                <div .modal-header>
+                  <button type=button .close data-dismiss=modal aria-hidden=true>&times;
+                  <h4 .modal-title>#{title}
+                <div .modal-body>
+                  ^{body}
+                <div .modal-footer>
+                  ^{footer}
+|]
+
+panel :: T.Text -> Widget -> Widget
+panel title body = [whamlet|
+  <div .panel-heading>
+    <h3 .panel-title>#{title}
+  <div .panel-body>
+    ^{body}
+|]
+
+-- exported
+successPanel :: T.Text -> Widget -> Widget
+successPanel title body = [whamlet|
+  <div .panel .panel-success>
+    ^{panel title body}
+|]
+
+-- exported
+infoPanel :: T.Text -> Widget -> Widget
+infoPanel title body = [whamlet|
+  <div .panel .panel-info>
+    ^{panel title body}
+|]
+-- exported
+dangerPanel :: T.Text -> Widget -> Widget
+dangerPanel title body = [whamlet|
+  <div .panel .panel-danger>
+    ^{panel title body}
 |]

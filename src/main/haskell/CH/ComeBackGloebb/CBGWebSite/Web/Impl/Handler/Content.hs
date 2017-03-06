@@ -156,51 +156,74 @@ editLayout path body props =
   contentLayout ("edit" : path) $ editPage body props
 
 editPage :: Widget -> Widget -> Widget
-editPage contentBody propsPanel = [whamlet|
-    <div #buttons>
-        <button #savebutton type=button .btn .btn-lg .btn-primary>
-            Save
-    <script>
-        function restoreSaveButton() {
-            \$('#savebutton').removeClass('btn-success')
-                            .removeClass('btn-danger')
-                            .addClass('btn-primary')
-                            .text('Save');
-        }
-        function successSaveButton() {
-            \$('#savebutton').removeClass('btn-primary')
-                            .removeClass('btn-danger')
-                            .addClass('btn-success')
-                            .text('Saved!');
-            window.setTimeout(restoreSaveButton, 5000);
-        }
-        function errorSaveButton() {
-            \$('#savebutton').removeClass('btn-success')
-                            .removeClass('btn-primary')
-                            .addClass('btn-danger')
-                            .text('Error while saving! Retry?');
-            window.setTimeout(restoreSaveButton, 5000);
-        }
-        \$('#savebutton').click(function(event) {
-            \$.post('#', {
-                body: CKEDITOR.instances.body.getData()
-              , props: $('#pageProperties').serializeArray()
-            }, function(ret) {})
-            .success(successSaveButton)
-            .error(errorSaveButton);
-        });
-    <div>
-        <ul .nav .nav-tabs role=tablist>
-            <li role=presentation .active>
-                <a href=#content aria-controls=content role=tab data-toggle=tab>Content
-            <li role=presentation>
-                <a href=#properties aria-controls=properties role=tab data-toggle=tab>Properties
-        <div .tab-content>
-            <div role=tabpanel .tab-pane .active id=content>
-                ^{ckEditor contentBody}
-            <div role=tabpanel .tab-pane id=properties>
-                ^{propsPanel}
-    |]
+editPage contentBody propsPanel = do
+  let contentPanel =
+        successPanel
+          "Inhalt"
+          [whamlet|
+            <ul .nav .nav-tabs role=tablist>
+                <li role=presentation .active>
+                    <a href=#content aria-controls=content role=tab data-toggle=tab>Content
+                <li role=presentation>
+                    <a href=#properties aria-controls=properties role=tab data-toggle=tab>Properties
+            <div .tab-content>
+                <div role=tabpanel .tab-pane .active id=content>
+                    ^{ckEditor contentBody}
+                <div role=tabpanel .tab-pane id=properties>
+                    ^{propsPanel}
+          |]
+      metadataPanel =
+        infoPanel
+          "Eigenschaften"
+          [whamlet|
+          |]
+      saveButton :: Widget
+      saveButton = do
+        toWidget [julius|
+          function restoreSaveButton() {
+              $('#savebutton').removeClass('btn-success')
+                              .removeClass('btn-danger')
+                              .addClass('btn-primary')
+                              .text('Save');
+          }
+          function successSaveButton() {
+              $('#savebutton').removeClass('btn-primary')
+                              .removeClass('btn-danger')
+                              .addClass('btn-success')
+                              .text('Saved!');
+              window.setTimeout(restoreSaveButton, 5000);
+          }
+          function errorSaveButton() {
+              $('#savebutton').removeClass('btn-success')
+                              .removeClass('btn-primary')
+                              .addClass('btn-danger')
+                              .text('Error while saving! Retry?');
+              window.setTimeout(restoreSaveButton, 5000);
+          }
+          $('#savebutton').click(function(event) {
+              $.post('#', {
+                  body: CKEDITOR.instances.body.getData()
+                , props: $('#pageProperties').serializeArray()
+              }, function(ret) {})
+              .success(successSaveButton)
+              .error(errorSaveButton);
+          });
+        |]
+        [whamlet|
+          <button #savebutton type=button .btn .btn-lg .btn-primary>Speichern
+        |]
+      actionPanel =
+        dangerPanel
+          "Aktionen"
+          saveButton
+  [whamlet|
+    <div .row>
+      <div .col-md-8>
+        ^{contentPanel}
+      <div .col-md-4>
+        ^{metadataPanel}
+        ^{actionPanel}
+  |]
 
 ckEditor :: Widget -> Widget
 ckEditor widget = do

@@ -134,13 +134,20 @@ getAssetsR (ContentPath path) = do
       $logError $ T.pack $ show e
       fail "Internal error while trying to load asset."
     Right (thisAsset, assets) -> do
-      let addFolderDialog =
+      let icon asset = if assetType asset `elem` ["application/x-directory", "unknown"]
+                       then [whamlet|
+                         <img src=@{StaticR gnome_folder_png} aria-hidden=true>
+                       |]
+                       else [whamlet|
+                         <img src=@{StaticR gnome_text_x_generic_png} aria-hidden=true>
+                       |]
+          addFolderDialog =
             actionDialog
               "addFolder"
+              "Neuer Ordner"
+              "PUT"
               (AssetR  $ ContentPath path)
               (AssetsR $ ContentPath path)
-              "PUT"
-              "Neuer Ordner"
               [whamlet|
                 <label for=addFolderInput>Name des neuen Ordners
                 <input #addFolderInput type=text name=addFolderInput>
@@ -152,82 +159,80 @@ getAssetsR (ContentPath path) = do
           deleteFolderDialog =
             actionDialog
               "deleteFolder"
+              "Wirklich löschen?"
+              "DELETE"
               (AssetR  $ ContentPath path)
               (AssetsR $ ContentPath parentPath)
-              "DELETE"
-              "Wirklich löschen?"
               [whamlet|<p>Der aktuell angezeigte Order wird mitsamt Inhalt gelöscht!|]
               [whamlet|
                 <button type=button .btn .btn-default data-dismiss=modal>Lieber doch nicht
                 <button type=submit .btn .btn-primary onClick=deleteFolder()>Löschen
               |]
+          uploadFileDialog =
+            fileDialog
+              "uploadFile"
+              "Datei hochladen"
+              (AssetR $ ContentPath path)
+              [whamlet|
+                <label for=fileName>Name der neuen Datei auf dem Server
+                <input #fileName type=text name=fileName>
+                <label for=file>Datei auswählen
+                <input #file type=file name=file>
+              |]
+              [whamlet|
+                <button type=button .btn .btn-default data-dismiss=modal>Schliessen
+                <button type=submit .btn .btn-primary>Hochladen
+              |]
+          contentPanel =
+            successPanel
+              "Inhalt"
+              [whamlet|
+                <div .assets .row>
+                $forall asset <- assets
+                  <a href=@{AssetsR $ ContentPath $ map T.pack (assetPath asset)}>
+                    <div .asset .col-md-2 .thumbnail style="height: 150px; margin: 10px;">
+                      $if isPrefixOf "image/" $ assetType asset
+                        <img src=@{AssetR $ ContentPath $ map T.pack $ assetPath asset}>
+                      $else
+                        <div style="height: 100px">
+                          ^{icon asset}
+                          <div>#{assetName asset}
+              |]
+          metadataPanel =
+            infoPanel
+              "Metadaten"
+              [whamlet|
+                <dl>
+                  <dt>Name
+                  <dd>#{assetName thisAsset}
+                  <dt>Typ
+                  <dd>#{assetType thisAsset}
+                  <dt>Hochgeladen von
+                  <dd>#{assetUploadedBy thisAsset}
+                  <dt>Hochgeladen am
+                  <dd>#{show $ assetUploadedDate thisAsset}
+              |]
+          actionPanel =
+            dangerPanel
+              "Aktionen"
+              [whamlet|
+                <a href=#addFolder role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Neuer Ordner
+                <a href=#uploadFile role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Datei hochladen
+                <a href=#deleteFolder role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Datei löschen
+              |]
+              
       layout comp ("assets" : path) [whamlet|
-      <div .assets .row>
-        ^{addFolderDialog}
-        <div #uploadFile .modal .fade>
-          <div .modal-dialog>
-            <div .modal-content>
-              <form method=post action=@{AssetR $ ContentPath path} enctype="multipart/form-data">
-                <div .modal-header>
-                  <button type=button .close data-dismiss=modal aria-hidden=true>&times;
-                  <h4 .modal-title>Datei hochladen
-                <div .modal-body>
-                  <label for=fileName>Name der neuen Datei auf dem Server
-                  <input #fileName type=text name=fileName>
-                  <label for=file>Datei auswählen
-                  <input #file type=file name=file>
-                <div .modal-footer>
-                  <button type=button .btn .btn-default data-dismiss=modal>Schliessen
-                  <button type=submit .btn .btn-primary>Hochladen
-        ^{deleteFolderDialog}
-        <div .col-md-8>
-          <div .panel .panel-success>
-            <div .panel-heading>
-              <h3 .panel-title>Inhalt
-            <div .panel-body>
-              <div .assets .row>
-              $forall asset <- assets
-                <a href=@{AssetsR $ ContentPath $ map T.pack (assetPath asset)}>
-                  <div .asset .col-md-2 .thumbnail style="height: 150px; margin: 10px;">
-                    $if isPrefixOf "image/" $ assetType asset
-                      <img src=@{AssetR $ ContentPath $ map T.pack $ assetPath asset}>
-                    $else
-                      <div style="height: 100px">
-                        ^{icon asset}
-                        <div>#{assetName asset}
-        <div .col-md-4>
-          <div .panel .panel-info>
-            <div .panel-heading>
-              <h3 .panel-title>Metadaten
-            <div .panel-body>
-              <dl>
-                <dt>Name
-                <dd>#{assetName thisAsset}
-                <dt>Typ
-                <dd>#{assetType thisAsset}
-                <dt>Hochgeladen von
-                <dd>#{assetUploadedBy thisAsset}
-                <dt>Hochgeladen am
-                <dd>#{show $ assetUploadedDate thisAsset}
-          <div .panel .panel-danger>
-            <div .panel-heading>
-              <h3 .panel-title>Aktionen
-            <div .panel-body>
-              <a href=#addFolder role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Neuer Ordner
-              <a href=#uploadFile role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Datei hochladen
-              <a href=#deleteFolder role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Datei löschen
-    |]
+        <div .assets .row>
+          ^{addFolderDialog}
+          ^{uploadFileDialog}
+          ^{deleteFolderDialog}
+          <div .col-md-8>
+            ^{contentPanel}
+          <div .col-md-4>
+            ^{metadataPanel}
+            ^{actionPanel}
+      |]
 
-  where
-    icon :: Asset -> Widget
-    icon asset = if assetType asset `elem` ["application/x-directory", "unknown"]
-                 then [whamlet|
-                   <img src=@{StaticR gnome_folder_png} aria-hidden=true>
-                 |]
-                 else [whamlet|
-                   <img src=@{StaticR gnome_text_x_generic_png} aria-hidden=true>
-                 |]
- 
 auditTrail :: [T.Text] -> Widget
 auditTrail (_ : rest) = do
   repo <- compRepository <$> component'
