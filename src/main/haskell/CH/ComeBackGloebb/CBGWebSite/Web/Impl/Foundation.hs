@@ -68,7 +68,7 @@ mkYesodData "CBGWebSite" [parseRoutes|
     /auth                             AuthR                 Auth            getAuth
     /members                          MembersR              GET
     /content/+ContentPath             ContentR              GET
-    /edit/content/+ContentPath        EditContentR          GET POST
+    /edit/content/+ContentPath        EditContentR          GET POST DELETE
     /members/calendar                 MemberCalendarR       GET
     /members/calendar/month/#Int/#Int MemberCalendarMR      GET
     /members/event/edit/#T.Text       EventR                GET POST

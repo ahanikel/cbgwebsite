@@ -13,6 +13,7 @@
 module CH.ComeBackGloebb.CBGWebSite.Web.Impl.Layout ( layout
                                                     , actionDialog
                                                     , fileDialog
+                                                    , redirectDialog
                                                     , successPanel
                                                     , infoPanel
                                                     , dangerPanel
@@ -210,6 +211,27 @@ fileDialog id title url body footer = [whamlet|
                 <div .modal-footer>
                   ^{footer}
 |]
+
+-- exported
+redirectDialog :: T.Text -> T.Text -> Route CBGWebSite -> Widget -> Widget -> Widget
+redirectDialog id title url body footer = do
+  toWidget [julius|
+    function editNewPage(name) {
+      window.location.assign("@{url}/" + name);
+    }
+  |]
+  [whamlet|
+    <div ##{id} .modal .fade>
+      <div .modal-dialog>
+        <div .modal-content>
+          <div .modal-header>
+            <button type=button .close data-dismiss=modal aria-hidden=true>&times;
+            <h4 .modal-title>#{title}
+          <div .modal-body>
+            ^{body}
+          <div .modal-footer>
+            ^{footer}
+  |]
 
 panel :: T.Text -> Widget -> Widget
 panel title body = [whamlet|

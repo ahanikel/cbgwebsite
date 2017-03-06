@@ -91,7 +91,7 @@ getEditContentR (ContentPath pieces) = do
                 <span>
                   ^{label p}
                   ^{element p v}
-                  <button .removeProp type=button onClick=removeProp("#{p}")>
+                  <button .removeProp type=button onClick=removeProp('#{p}')>
                     <span .glyphicon .glyphicon-minus-sign>
               |]
               label p = [whamlet|
@@ -103,7 +103,7 @@ getEditContentR (ContentPath pieces) = do
               propertiesWidget = [whamlet|
                 <script>
                   function addProp(p) {
-                    \$('.ppRow:last-child').before('<div class="ppRow"><span><label for="prop_"' + p + '>' + p + '</label><input type="text" id="' + p + '" name = "' + p + '" value=""><button class="removeProp" type="button" onClick="removeProp(\"' + p + '\")"><span class="glyphicon glyphicon-minus-sign"></span></button></span></div>');
+                    \$('.ppRow:last-child').before('<div class="ppRow"><span><label for="prop_"' + p + '>' + p + '</label><input type="text" id="' + p + '" name = "' + p + '" value=""><button class="removeProp" type="button" onClick=\'removeProp(\"' + p + '\")\'><span class="glyphicon glyphicon-minus-sign"></span></button></span></div>');
                   }
                 <form #pageProperties>
                   $forall p <- props''
@@ -146,17 +146,23 @@ postEditContentR (ContentPath pieces) = do
     pairs [] = []
     pairs (one : two : rest) = (one, two) : pairs rest
 
+deleteEditContentR :: ContentPath -> Handler ()
+deleteEditContentR (ContentPath pieces) = do
+    let url = map T.unpack pieces
+    repo <- compRepository <$> component
+    eitherRes <- liftIO $ runEitherT $ do
+      getNode repo url >>= deleteNode
+    case eitherRes of
+      Left _ -> notFound
+      Right _ -> return ()
+
 contentLayout :: [T.Text] -> Widget -> Handler Html
 contentLayout path body = do
   comp <- component
   layout comp path body
 
 editLayout :: [T.Text] -> Widget -> Widget -> Handler Html
-editLayout path body props =
-  contentLayout ("edit" : path) $ editPage body props
-
-editPage :: Widget -> Widget -> Widget
-editPage contentBody propsPanel = do
+editLayout path contentBody propsPanel = contentLayout ("edit" : path) $ do
   let contentPanel =
         successPanel
           "Inhalt"
@@ -210,12 +216,53 @@ editPage contentBody propsPanel = do
           });
         |]
         [whamlet|
-          <button #savebutton type=button .btn .btn-lg .btn-primary>Speichern
+          <button #savebutton type=button .btn .btn-primary>Speichern
+        |]
+      newPageButton :: Widget
+      newPageButton = do
+        redirectDialog
+          "newPageDialog"
+          "Neue Seite erstellen"
+          (EditContentR $ ContentPath $ tail path)
+          [whamlet|
+            <label for=newPageInput>Name der neuen Seite
+            <input #newPageInput type=text name=newPageInput>
+          |]
+          [whamlet|
+            <button type=button .btn .btn-default data-dismiss=modal>Schliessen
+            <button type=submit .btn .btn-primary onClick=editNewPage($('#newPageInput').val())>Erstellen
+          |]
+        [whamlet|
+          <button href=#newPageDialog role=button data-toggle=modal .btn .btn-primary>Neue Seite
+        |]
+      deletePageButton :: Widget
+      deletePageButton = do
+        let path' = tail path
+        if path' == [] then return ()
+        else actionDialog
+          "deletePage"
+          "Wirklich löschen?"
+          "DELETE"
+          (EditContentR $ ContentPath path')
+          (EditContentR $ ContentPath $ init path')
+          [whamlet|
+            <p>Die aktuell angezeigte Seite wird gelöscht!
+          |]
+          [whamlet|
+            <button type=button .btn .btn-default data-dismiss=modal>Lieber doch nicht
+            <button type=submit .btn .btn-primary onClick=deletePage()>Löschen
+          |]
+        [whamlet|
+          <button href=#deletePage role=button data-toggle=modal .btn .btn-primary>Seite löschen
         |]
       actionPanel =
         dangerPanel
           "Aktionen"
-          saveButton
+          [whamlet|
+            ^{saveButton}
+            ^{newPageButton}
+            ^{deletePageButton}
+          |]
   [whamlet|
     <div .row>
       <div .col-md-8>
