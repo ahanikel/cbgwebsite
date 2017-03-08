@@ -18,3 +18,6 @@ run
 deploy
 backup
 orig.cbgusers
+scripts
+syncback
+target
