@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE BangPatterns      #-}
 
-module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Event (Event(..), newEvent, getEventsForMonth) where
+module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Event (Event(..), newEvent, getEventsForMonth, getAllEvents) where
 
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import           Control.Monad                                     (liftM)
@@ -19,7 +19,7 @@ import           Data.DateTime                                     (DateTime, fr
                                                                     toSqlString,
                                                                     toGregorian',
                                                                     getCurrentTime)
-import           Data.Maybe                                        (fromMaybe)
+import           Data.Maybe                                        (fromMaybe, fromJust)
 import qualified Data.Text                                         as T
 import           Data.UUID                                         (UUID)
 import           Data.UUID.V4                                      (nextRandom)
@@ -95,8 +95,8 @@ instance FromJSON Event where
       <$> (read <$> T.unpack <$> v .: "evUUID")
       <*> (pure $ Repository "")
       <*> v .: "evTitle"
-      <*> v .: "evStartDate"
-      <*> v .: "evEndDate"
+      <*> (fromJust <$> fromSqlString <$> v .: "evStartDate")
+      <*> (fromSqlString <$> v .: "evEndDate")
       <*> v .: "evDescription"
       <*> v .: "evLocation"
       
@@ -104,9 +104,16 @@ fromNode :: Node -> RepositoryContext Event
 fromNode n = readItem (node_repo n) (urlToString $ node_path n)
 
 -- exported
+getAllEvents :: Repository -> RepositoryContext [Event]
+getAllEvents repo = getEventsForURL repo []
+
+-- exported
 getEventsForMonth :: Repository -> Int -> Int -> RepositoryContext [Event]
 getEventsForMonth repo year month = do
-  let url = map pathCompFromString ["byStartDate", show year, show month]
+  getEventsForURL repo $ map pathCompFromString ["byStartDate", show year, show month]
+
+getEventsForURL :: Repository -> URL -> RepositoryContext [Event]
+getEventsForURL repo url = do
   monthNode <- getNode repo url
   indexNodes <- getChildNodesRecursively monthNode
   let indexNodes' = filter ((== 5) . length . node_path) indexNodes

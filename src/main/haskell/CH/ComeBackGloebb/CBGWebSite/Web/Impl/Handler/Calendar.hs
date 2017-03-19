@@ -31,11 +31,12 @@ import Network.Wai                                                  (strictReque
 -- other imports
 import           Control.Monad                                      (liftM)
 import           Control.Monad.Trans.Either                         (runEitherT)
-import           Data.Aeson                                         (decode, encode)
+import           Data.Aeson                                         (eitherDecode, encode)
 import           Data.DateTime
+import           Data.Either                                        (either)
 import           Data.Function                                      (on)
 import           Data.List                                          (partition, sortBy, find)
-import           Data.Maybe                                         (fromMaybe, fromJust)
+import           Data.Maybe                                         (fromMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.UUID                                          as U
@@ -235,7 +236,7 @@ postEventR name = do
   comp <- component
   let repo = compRepository comp
   let name' = T.unpack name
-  let uuid = read name'
+  let uuid = read name' :: U.UUID
   selectRep $ do
     provideRep $ do
       ((result, widget), enctype) <- runFormPost $ eventForm repo uuid Nothing
@@ -260,7 +261,7 @@ postEventR name = do
     provideRep $ do
       req <- getRequest
       body <- liftIO $ strictRequestBody $ reqWaiRequest req
-      let ev @ Event {..} = fromJust $ decode body
+      let ev @ Event {..} = either error id $ eitherDecode body
       ev' <- if U.null evUUID
              then liftIO $ newEvent repo evTitle evStartDate evEndDate evDescription evLocation
              else return ev { evRepo = repo }
@@ -330,3 +331,94 @@ naviChildren _ = Nothing
 --             <button type=button .btn .btn-default data-dismiss=modal>Schliessen
 --             <button type=submit .btn .btn-primary onClick=editCalItem($('#folderName').val())>Erstellen
 -- |]
+
+getMemberCalendarListR :: Handler TypedContent
+getMemberCalendarListR = do
+  comp <- component
+  let repo = compRepository comp
+  events <- sortBy (compare `on` evStartDate) <$> getEvents repo
+  selectRep $ do
+    provideRep $ do
+      layout comp ["list"] $ do
+        [whamlet|
+          <div .row ng-app=calendarApp ng-controller=CalendarController>
+            <div .col-sm-7>
+              <div .panel .panel-success>
+                <div .panel-heading>
+                  <h3 .panel-title>Kalender als Liste
+                <div .panel-body>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Wann?
+                        <th>Was?
+                    <tbody>
+                      <tr ng-repeat="event in events" ng-click="setCurrent(event)">
+                        <td>{{event.evStartDate}}
+                        <td>{{event.evTitle}}
+            <div .col-sm-4>
+              <div .panel .panel-info>
+                <div .panel-heading>
+                  <h3 .panel-title>Event-Details
+                <div .panel-body>
+                  <form #event-form .form-horizontal>
+                    <div #evUUID-field .form-group>
+                      <label #evUUID-label for=evUUID-input>UUID
+                      <input #evUUID-input .form-control type=text name=evUUID ng-model=current.evUUID>
+                    <div #evTitle-field .form-group>
+                      <label #evTitle-label for=evTitle-input>Titel
+                      <input #evTitle-input .form-control type=text name=evTitle ng-model=current.evTitle>
+                    <div #evStartDate-field .form-group>
+                      <label #evStartDate-label for=evStartDate-input>Startdatum
+                      <input #evStartDate-input .form-control type=text name=evStartDate ng-model=current.evStartDate>
+                    <div #evEndDate-field .form-group>
+                      <label #evEndDate-label for=evEndDate-input>Enddatum
+                      <input #evEndDate-input .form-control type=text name=evEndDate ng-model=current.evEndDate>
+                    <div #evDescription-field .form-group>
+                      <label #evDescription-label for=evDescription-input>Beschreibung
+                      <input #evDescription-input .form-control type=text name=evDescription ng-model=current.evDescription>
+                    <div #evLocation-field .form-group>
+                      <label #evLocation-label for=evLocation-input>Ort
+                      <input #evLocation-input .form-control type=text name=evLocation ng-model=current.evLocation>
+                    <div #evButtons .form-group>
+                      <button #event-submit-button ng-click=submitEdit()>OK
+                      <button #event-cancel-button ng-click=cancelEdit()>Abbrechen
+              <div .panel .panel-danger>
+                <div .panel-heading>
+                  <h3 .panel-title>Aktionen
+                <div .panel-body>
+        |]
+        toWidget [julius|
+          angular.module('calendarApp', [])
+          .controller('CalendarController', function ($http, $scope) {
+            var self = this;
+            $http.get('@{MemberCalendarListR}')
+            .then(function (response) {
+              $scope.events = response.data;
+              $scope.current = $scope.events[0];
+              $scope.original = angular.copy($scope.current);
+            });
+            $scope.cancelEdit = function() {
+              angular.copy($scope.original, $scope.current);
+            };
+            $scope.submitEdit = function() {
+              if ($scope.current.evUUID == "") {
+                $scope.current.evUUID = "00000000-0000-0000-0000-000000000000";
+              }
+              var url = '@{EventR ""}';
+              $http.post(url.substring(0, url.length - 1) + $scope.current.evUUID, $scope.current);
+            };
+            $scope.setCurrent = function(event) {
+              $scope.current = event;
+              $scope.original = angular.copy(event);
+            };
+          })
+        |]
+    provideRep $ returnJson events
+  where getEvents :: Repository -> Handler [Event]
+        getEvents repo = do
+              eitherEvents <- liftIO $ runEitherT $ getAllEvents repo
+              case eitherEvents of
+                  Left  e      -> do $logError $ T.pack $ show e
+                                     return ([] :: [Event])
+                  Right events -> return events

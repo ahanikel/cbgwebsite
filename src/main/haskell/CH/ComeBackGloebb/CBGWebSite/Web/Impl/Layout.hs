@@ -116,6 +116,7 @@ htmlHead pageContent = [hamlet|
     <script src=@{StaticR jquery_js}>
     <script src=@{StaticR bootstrap_js}>
     <script src=@{StaticR ie10_viewport_bug_workaround_js}>
+    <script src=@{StaticR angular_min_js}>
     ^{pageHead pageContent}
 |]
 

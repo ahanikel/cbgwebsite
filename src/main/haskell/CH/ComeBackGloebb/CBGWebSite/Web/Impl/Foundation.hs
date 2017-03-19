@@ -70,6 +70,7 @@ mkYesodData "CBGWebSite" [parseRoutes|
     /content/+ContentPath             ContentR              GET
     /edit/content/+ContentPath        EditContentR          GET POST DELETE
     /members/calendar                 MemberCalendarR       GET
+    /members/calendar/list            MemberCalendarListR   GET
     /members/calendar/month/#Int/#Int MemberCalendarMR      GET
     /members/event/edit/#T.Text       EventR                GET POST
     /members/list                     MemberListR           GET
@@ -93,7 +94,6 @@ instance Yesod CBGWebSite where
     isAuthorized RootR                  False = return Authorized
     isAuthorized FavR                   False = return Authorized
     isAuthorized (AuthR _)              _     = return Authorized
-    isAuthorized (EventR _)             _     = return $ Unauthorized ""
 
     -- the members area
     isAuthorized MembersR               False = do
@@ -120,14 +120,13 @@ instance Yesod CBGWebSite where
     -- the event calendar
     isAuthorized  MemberCalendarR       False = isAuthorized MembersR False
 
+    isAuthorized  MemberCalendarListR   False = isAuthorized MembersR False
+
     isAuthorized (MemberCalendarMR _ _) False = isAuthorized MembersR False
 
-    isAuthorized (MemberCalendarMR _ _) True  = do
-      authUser <- maybeAuthId
-      case authUser of
-        Just userName | userName `has` Write `On` MemberCalendar -> return Authorized
-        _                                                        -> return $ Unauthorized ""
+    isAuthorized (EventR _)             w     = isAuthorized MemberListR w
 
+    -- the page content
     isAuthorized (ContentR _)           False = return Authorized
 
     isAuthorized (EditContentR _)       w     = isAuthorized MemberListR w
