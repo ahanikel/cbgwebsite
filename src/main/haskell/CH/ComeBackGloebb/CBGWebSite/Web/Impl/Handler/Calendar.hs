@@ -268,6 +268,19 @@ postEventR name = do
       res <- liftIO $ runEitherT $ writeItem ev'
       either (fail . show) returnJson res
 
+deleteEventR :: T.Text -> Handler TypedContent
+deleteEventR name = do
+  comp <- component
+  let repo = compRepository comp
+  let name' = T.unpack name
+  let uuid = read name' :: U.UUID
+  selectRep $ do
+    provideRep $ do
+      res <- liftIO $ runEitherT $ do
+        ev <- readItem repo (show uuid) :: RepositoryContext Event
+        deleteItem ev
+      either (fail . show) returnJson res
+
 auditTrail :: [T.Text] -> Widget
 auditTrail path = do
   [whamlet|
@@ -299,38 +312,6 @@ auditTrail' path = do
 
 naviChildren :: [T.Text] -> Maybe Widget
 naviChildren _ = Nothing
-
--- calendarWidget :: Widget
--- calendarWidget = [whamlet|
---   <div .calendar .row>
---     ^{editCalItem}
--- |]
--- 
--- editCalItem :: Event -> Widget
--- editCalItem event = [whamlet|
---     <div #editCalItem .modal .fade>
---       <script>
---         function updateCalItem() {
---           \$.ajax(
---             { url: "@{EventR $ ContentPath $ evTitle event}/"
---             , type: "PUT"
---             , success: function(result) {
---               }
---             }
---           );
---         }
---       <div .modal-dialog>
---         <div .modal-content>
---           <div .modal-header>
---             <button type=button .close data-dismiss=modal aria-hidden=true>&times;
---             <h4 .modal-title>Neuer Ordner
---           <div .modal-body>
---             <label for=folderName>Name des neuen Ordners
---             <input #folderName type=text name=folderName>
---           <div .modal-footer>
---             <button type=button .btn .btn-default data-dismiss=modal>Schliessen
---             <button type=submit .btn .btn-primary onClick=editCalItem($('#folderName').val())>Erstellen
--- |]
 
 getMemberCalendarListR :: Handler TypedContent
 getMemberCalendarListR = do
@@ -383,30 +364,82 @@ getMemberCalendarListR = do
                     <div #evButtons .form-group>
                       <button #event-submit-button ng-click=submitEdit()>OK
                       <button #event-cancel-button ng-click=cancelEdit()>Abbrechen
+                      <button #event-edit-button ng-click=beginEdit()>Bearbeiten
               <div .panel .panel-danger>
                 <div .panel-heading>
                   <h3 .panel-title>Aktionen
                 <div .panel-body>
+                  <a ng-click=newEvent() role=button .btn .btn-primary .btn-sm style="margin-bottom: 5px">Neuer Eintrag
+                  <a ng-click=deleteEvent() role=button .btn .btn-primary .btn-sm style="margin-bottom: 5px">Eintrag löschen
         |]
         toWidget [julius|
           angular.module('calendarApp', [])
           .controller('CalendarController', function ($http, $scope) {
             var self = this;
+            eventView();
+            eventClear();
             $http.get('@{MemberCalendarListR}')
             .then(function (response) {
               $scope.events = response.data;
-              $scope.current = $scope.events[0];
-              $scope.original = angular.copy($scope.current);
+              eventClear();
+              eventView();
             });
+            function eventClear() {
+              $("#event-form input, #event-form textarea").val(null);
+              $scope.current = {};
+              $scope.original = {};
+            }
+            function eventHide() {
+              $("#event-form").css("visibility", "hidden");
+              $("#event-edit-button").css("visibility", "hidden");
+              $("#event-submit-button").css("visibility", "hidden");
+              $("#event-cancel-button").css("visibility", "hidden");
+              $("#event-form input").prop("readonly", true).prop("disabled", true);
+            }
+            function eventView() {
+              $("#event-form").removeClass("event-edit");
+              $("#event-form").addClass("event-selected");
+              $("#event-form").css("visibility", "visible");
+              $("#event-edit-button").css("visibility", "visible");
+              $("#event-submit-button").css("visibility", "collapse");
+              $("#event-cancel-button").css("visibility", "collapse");
+              $("#event-form input").prop("readonly", true).prop("disabled", true);
+            }
+            function eventEdit() {
+              $("#event-form").addClass("event-edit");
+              $("#event-edit-button").css("visibility", "collapse");
+              $("#event-submit-button").css("visibility", "visible");
+              $("#event-cancel-button").css("visibility", "visible");
+              $("#event-form input").prop("readonly", false).prop("disabled", false);
+            }
+            var url = '@{EventR ""}';
             $scope.cancelEdit = function() {
               angular.copy($scope.original, $scope.current);
+              eventView();
+            };
+            $scope.beginEdit = function() {
+              eventEdit();
             };
             $scope.submitEdit = function() {
               if ($scope.current.evUUID == "") {
                 $scope.current.evUUID = "00000000-0000-0000-0000-000000000000";
               }
-              var url = '@{EventR ""}';
               $http.post(url.substring(0, url.length - 1) + $scope.current.evUUID, $scope.current);
+              eventView();
+            };
+            $scope.newEvent = function() {
+              eventClear();
+              eventEdit();
+            };
+            $scope.deleteEvent = function() {
+              $http.delete(url.substring(0, url.length - 1) + $scope.current.evUUID);
+              delete $scope.current;
+              $http.get('@{MemberCalendarListR}')
+              .then(function (response) {
+                $scope.events = response.data;
+                eventClear();
+                eventView();
+              });
             };
             $scope.setCurrent = function(event) {
               $scope.current = event;
