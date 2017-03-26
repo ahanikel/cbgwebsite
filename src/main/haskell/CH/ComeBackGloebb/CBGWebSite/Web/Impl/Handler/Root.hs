@@ -52,16 +52,14 @@ getMembersR = rootLayout ["members"] [whamlet|
   <p>Auf den ersten Blick sieht alles so aus wie vorher, aber das täuscht :-)
   <p>Vorteile:
     <ul>
-      <li>Man kann Seiten jetzt mit einem Wysiwyg-Editor bearbeiten. Einfach in der Browser-URL vor "/content/..." ein "/edit" setzen, also z.B. <tt>https://www.comebackgloebb.ch/edit/content/welcome.html</tt>
+      <li>Man kann Seiten jetzt mit einem Wysiwyg-Editor bearbeiten.
       <li>Sicherere Speicherung der Passwörter (sha512 statt dem unsicheren md5).
       <li>Der Upload von Bildern sollte einfacher sein (aber vielleicht ist das browserabhängig, Feedback willkommen!).
       <li>Die Mitgliederliste ist online bearbeitbar.
       <li>Es gibt einen Kalender, in den man Termine eintragen kann.
   <p>(vorläufige) Nachteile:
     <ul>
-      <li>Der Kalender funktioniert noch nicht.
-      <li>Man kann noch keine Sachen hochladen ausser Bildern.
-      <li>Die Bilder werden in der Galerie immer noch in Originalgrösse runtergeladen, statt als kleinerer Thumbnail.
+      <li>Der Kalender funktioniert noch seehr holprig.
       <li>Allgemein sehen einige Sachen noch etwas "unfertig" aus.
       <li>Eventuell habe ich noch etwas vergessen, was auf der alten Homepage drauf war?
   <p>Die Negativpunkte sollten nach und nach behoben werden. Fehlermeldungen, Wünsche und Anregungen sind willkommen!

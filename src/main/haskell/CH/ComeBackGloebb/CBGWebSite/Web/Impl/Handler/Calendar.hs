@@ -66,58 +66,71 @@ getMemberCalendarMR year month = do
     provideRep $ do
       layout comp [T.pack $ show year, T.pack $ show month] $ do
           [whamlet|
-            <div .row>
-                <div .col-sm-7>
-                    <div #calendar>
-                        $forall week <- calWithEvents events
-                            <div .row>
-                                <div .col-sm-12 .col-md-12>
-                                    $forall day <- week
-                                        <div .day>#{dayno $ fst day}
-                                            $forall event <- snd day
-                                                <a .event-summary href=@{EventR (T.pack $ show $ evUUID event)}>
-                                                  <p data-event-json=#{TLE.decodeUtf8 $ encode event}>#{evTitle event}
-                <div .col-sm-4>
-                  <div .panel .panel-info>
-                    <div .panel-heading>
-                      <h3 .panel-title>Event-Details
-                    <div .panel-body>
-                      <form #event-form .form-horizontal>
-                        <div #evUUID-field .form-group>
-                          <label #evUUID-label for=evUUID-input>UUID
-                          <input #evUUID-input .form-control type=text name=evUUID>
-                        <div #evTitle-field .form-group>
-                          <label #evTitle-label for=evTitle-input>Titel
-                          <input #evTitle-input .form-control type=text name=evTitle>
-                        <div #evStartDate-field .form-group>
-                          <label #evStartDate-label for=evStartDate-input>Startdatum
-                          <input #evStartDate-input .form-control type=text name=evStartDate>
-                        <div #evEndDate-field .form-group>
-                          <label #evEndDate-label for=evEndDate-input>Enddatum
-                          <input #evEndDate-input .form-control type=text name=evEndDate>
-                        <div #evDescription-field .form-group>
-                          <label #evDescription-label for=evDescription-input>Beschreibung
-                          <input #evDescription-input .form-control type=text name=evDescription>
-                        <div #evLocation-field .form-group>
-                          <label #evLocation-label for=evLocation-input>Ort
-                          <input #evLocation-input .form-control type=text name=evLocation>
-                        <div #evButtons .form-group>
-                          <button #event-submit-button type=submit>OK
-                          <button #event-cancel-button type=cancel>Abbrechen
-                          <button #event-edit-button>Bearbeiten
-                  <div .panel .panel-danger>
-                    <div .panel-heading>
-                      <h3 .panel-title>Aktionen
-                    <div .panel-body>
-                      <a href=#addFolder role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Neuer Eintrag
-                      <a href=#uploadFile role=button data-toggle=modal .btn .btn-default .btn-sm style="margin-bottom: 5px">Eintrag löschen
-          |]
-          toWidgetHead [cassius|
+            <div .row ng-app=calendarApp ng-controller=CalendarController>
+              <div .col-sm-7>
+                <div #calendar>
+                  <div .row ng-repeat="week in events">
+                    <div .col-sm-12 .col-md-12>
+                      <div ng-repeat="day in week" .day>{{day[0]}}
+                        <a ng-repeat="event in day[1]" .event-summary ng-click="setCurrent(event)">
+                          <p>{{event.evTitle}}
+              <div .col-sm-4>
+                <div .panel .panel-info>
+                  <div .panel-heading>
+                    <h3 .panel-title>Event-Details
+                  <div .panel-body>
+                    <form #event-form .form-horizontal>
+                      <div #evUUID-field .form-group>
+                        <label #evUUID-label for=evUUID-input>UUID
+                        <input #evUUID-input .form-control type=text name=evUUID ng-model=current.evUUID>
+                      <div #evTitle-field .form-group>
+                        <label #evTitle-label for=evTitle-input>Titel
+                        <input #evTitle-input .form-control type=text name=evTitle ng-model=current.evTitle>
+                      <div #evStartDate-field .form-group>
+                        <label #evStartDate-label for=evStartDate-input>Startdatum
+                        <input #evStartDate-input .form-control type=text name=evStartDate ng-model=current.evStartDate>
+                      <div #evEndDate-field .form-group>
+                        <label #evEndDate-label for=evEndDate-input>Enddatum
+                        <input #evEndDate-input .form-control type=text name=evEndDate ng-model=current.evEndDate>
+                      <div #evDescription-field .form-group>
+                        <label #evDescription-label for=evDescription-input>Beschreibung
+                        <input #evDescription-input .form-control type=text name=evDescription ng-model=current.evDescription>
+                      <div #evLocation-field .form-group>
+                        <label #evLocation-label for=evLocation-input>Ort
+                        <input #evLocation-input .form-control type=text name=evLocation ng-model=current.evLocation>
+                      <div #evButtons .form-group>
+                        <button #event-submit-button ng-click=submitEdit()>OK
+                        <button #event-cancel-button ng-click=cancelEdit()>Abbrechen
+                        <button #event-edit-button ng-click=beginEdit()>Bearbeiten
+                <div .panel .panel-danger>
+                  <div .panel-heading>
+                    <h3 .panel-title>Aktionen
+                  <div .panel-body>
+                    <a ng-click=newEvent() role=button .btn .btn-primary .btn-sm style="margin-bottom: 5px">Neuer Eintrag
+                    <a ng-click=deleteEvent() role=button .btn .btn-primary .btn-sm style="margin-bottom: 5px">Eintrag löschen
           |]
           toWidget [julius|
-            $(function () {
+            angular.module('calendarApp', [])
+            .controller('CalendarController', function ($http, $scope) {
+              var self = this;
+              eventView();
+              eventClear();
+              $http.get('@{MemberCalendarMR year month}')
+              .then(function (response) {
+                $scope.events = response.data;
+                eventHide();
+                eventView();
+              });
               function eventClear() {
                 $("#event-form input, #event-form textarea").val(null);
+                $scope.current = { "evUUID" : ""
+                                 , "evTitle" : ""
+                                 , "evStartDate" : ""
+                                 , "evEndDate" : ""
+                                 , "evDescription" : ""
+                                 , "evLocation" : ""
+                                 };
+                $scope.original = angular.copy($scope.current);
               }
               function eventHide() {
                 $("#event-form").css("visibility", "hidden");
@@ -142,32 +155,48 @@ getMemberCalendarMR year month = do
                 $("#event-cancel-button").css("visibility", "visible");
                 $("#event-form input").prop("readonly", false).prop("disabled", false);
               }
-              $("#event-form").on("submit", function(event) {
-                event.preventDefault();
-                console.log($(this).serialize());
-              });
-              $("#event-edit-button").on("click", function(event) {
-                eventEdit();
-              });
-              $("#event-submit-button, #event-cancel-button").on("click", function(event) {
+              var url = '@{EventR ""}';
+              $scope.eventHide = eventHide;
+              $scope.cancelEdit = function() {
+                angular.copy($scope.original, $scope.current);
                 eventView();
-                return true;
-              });
-              $(".event-summary").on("click", function(e) {
-                e.preventDefault();
-                eventClear();
-                e.stopPropagation();
-                var event = $.parseJSON($(e.target).attr("data-event-json"));
-                for (k in event) {
-                  $("#" + k + "-input").val(event[k]);
-                  console.log(k + ": " + event[k]);
+              };
+              $scope.beginEdit = function() {
+                eventEdit();
+              };
+              $scope.submitEdit = function() {
+                if ($scope.current.evUUID == "") {
+                  $scope.current.evUUID = "00000000-0000-0000-0000-000000000000";
+                }
+                $http.post(url.substring(0, url.length - 1) + $scope.current.evUUID, $scope.current);
+                if ($scope.current.evUUID == "00000000-0000-0000-0000-000000000000") {
+                  $http.get('@{MemberCalendarListR}')
+                  .then(function (response) {
+                    $scope.events = response.data;
+                    eventClear();
+                    eventHide();
+                  });
                 }
                 eventView();
-              });
-              $("#calendar").on("click", function(event) {
-                eventHide();;
-              });
-              eventHide();;
+              };
+              $scope.newEvent = function() {
+                eventClear();
+                eventEdit();
+              };
+              $scope.deleteEvent = function() {
+                $http.delete(url.substring(0, url.length - 1) + $scope.current.evUUID);
+                $http.get('@{MemberCalendarListR}')
+                .then(function (response) {
+                  $scope.events = response.data;
+                  eventClear();
+                  eventHide();
+                });
+              };
+              $scope.setCurrent = function(event) {
+                $scope.current = event;
+                $scope.original = angular.copy(event);
+                eventView();
+              };
             });
           |]
 
@@ -192,9 +221,14 @@ getMemberCalendarMR year month = do
 
         cal              = calendarForMonth year month         :: [[DateTime]]
         calWithoutEvents = map (map (\d -> (d, []))) cal       :: [[(DateTime, [Event])]]
+
         -- mapping with the full list of events is not very efficient, it would be
         -- better to remove the events from the list that have already been considered
-        calWithEvents events = map (mergeCal events) calWithoutEvents :: [[(DateTime, [Event])]]
+        calWithEvents' :: [Event] -> [[(DateTime, [Event])]]
+        calWithEvents' events = map (mergeCal events) calWithoutEvents :: [[(DateTime, [Event])]]
+        calWithEvents :: [Event] -> [[(Int, [Event])]]
+        calWithEvents = map (map (\(dt, es) -> (dayno dt, es))) . calWithEvents'
+
 
 eventForm :: Repository -> U.UUID -> Maybe Event -> Html -> MForm Handler (FormResult Event, Widget)
 eventForm repo uuid mevent = do
