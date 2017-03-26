@@ -74,7 +74,10 @@ postAssetR (ContentPath path) = do
     Just userName -> do
       let upload (_, file) = do
            repo         <- compRepository <$> component
-           let name      = fromMaybe "noName" $ lookup "fileName" params
+           let name      = case lookup "fileName" params of
+                             Just "" -> fileName file
+                             Just n  -> n
+                             _       -> fileName file
                type'     = fileContentType file
            bytes        <- runConduit $ fileSource file $$ CB.sinkLbs
            eitherResult <- liftIO $ runEitherT $ do
