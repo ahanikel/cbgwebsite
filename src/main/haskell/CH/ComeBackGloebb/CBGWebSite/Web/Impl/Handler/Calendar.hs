@@ -325,7 +325,7 @@ getMemberCalendarListR = do
           <div .row ng-app=calendarApp ng-controller=CalendarController>
             <div .col-sm-7>
               <div .panel .panel-success>
-                <div .panel-heading>
+                <div ng-click=eventHide() .panel-heading>
                   <h3 .panel-title>Kalender als Liste
                 <div .panel-body>
                   <table>
@@ -381,13 +381,19 @@ getMemberCalendarListR = do
             $http.get('@{MemberCalendarListR}')
             .then(function (response) {
               $scope.events = response.data;
-              eventClear();
+              eventHide();
               eventView();
             });
             function eventClear() {
               $("#event-form input, #event-form textarea").val(null);
-              $scope.current = {};
-              $scope.original = {};
+              $scope.current = { "evUUID" : ""
+                               , "evTitle" : ""
+                               , "evStartDate" : ""
+                               , "evEndDate" : ""
+                               , "evDescription" : ""
+                               , "evLocation" : ""
+                               };
+              $scope.original = angular.copy($scope.current);
             }
             function eventHide() {
               $("#event-form").css("visibility", "hidden");
@@ -413,6 +419,7 @@ getMemberCalendarListR = do
               $("#event-form input").prop("readonly", false).prop("disabled", false);
             }
             var url = '@{EventR ""}';
+            $scope.eventHide = eventHide;
             $scope.cancelEdit = function() {
               angular.copy($scope.original, $scope.current);
               eventView();
@@ -425,6 +432,14 @@ getMemberCalendarListR = do
                 $scope.current.evUUID = "00000000-0000-0000-0000-000000000000";
               }
               $http.post(url.substring(0, url.length - 1) + $scope.current.evUUID, $scope.current);
+              if ($scope.current.evUUID == "00000000-0000-0000-0000-000000000000") {
+                $http.get('@{MemberCalendarListR}')
+                .then(function (response) {
+                  $scope.events = response.data;
+                  eventClear();
+                  eventHide();
+                });
+              }
               eventView();
             };
             $scope.newEvent = function() {
@@ -433,17 +448,17 @@ getMemberCalendarListR = do
             };
             $scope.deleteEvent = function() {
               $http.delete(url.substring(0, url.length - 1) + $scope.current.evUUID);
-              delete $scope.current;
               $http.get('@{MemberCalendarListR}')
               .then(function (response) {
                 $scope.events = response.data;
                 eventClear();
-                eventView();
+                eventHide();
               });
             };
             $scope.setCurrent = function(event) {
               $scope.current = event;
               $scope.original = angular.copy(event);
+              eventView();
             };
           })
         |]
