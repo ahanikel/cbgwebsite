@@ -191,15 +191,20 @@ getAssetsR (ContentPath path) = do
               "Inhalt"
               [whamlet|
                 <div .assets .row>
-                $forall asset <- assets
-                  <a href=@{AssetsR $ ContentPath $ map T.pack (assetPath asset)}>
-                    <div .asset .col-md-2 .thumbnail style="height: 150px; margin: 10px;">
-                      $if isPrefixOf "image/" $ assetType asset
-                        <img src=@{AssetR $ ContentPath $ map T.pack $ assetPath asset}>
-                      $else
-                        <div style="height: 100px">
-                          ^{icon asset}
-                          <div>#{assetName asset}
+                $case assets
+                  $of []
+                    $if assetType thisAsset == "application/pdf"
+                      <iframe src=@{AssetR $ ContentPath path} width=100% height=1000px>
+                  $of _
+                    $forall asset <- assets
+                      <a href=@{AssetsR $ ContentPath $ map T.pack (assetPath asset)}>
+                        <div .asset .col-md-2 .thumbnail style="height: 150px; margin: 10px;">
+                          $if isPrefixOf "image/" $ assetType asset
+                            <img src=@{AssetR $ ContentPath $ map T.pack $ assetPath asset}>
+                          $else
+                            <div style="height: 100px">
+                              ^{icon asset}
+                              <div>#{assetName asset}
               |]
           metadataPanel =
             infoPanel
