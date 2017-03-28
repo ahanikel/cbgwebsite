@@ -74,25 +74,55 @@ getGalleriesR = selectRep $
       Left e -> do
         $logError $ T.pack $ show e
         fail "Internal error while trying to list galleries."
-      Right galleries ->
+      Right galleries -> do
+        let
+          actionPanel =
+            dangerPanel
+              "Aktionen"
+              [whamlet|
+                  <a href=#addGallery role=button data-toggle=modal .btn .btn-default .btn-sm>Neues Album
+              |]
+          addGalleryDialog =
+            actionDialog
+              "addGallery"
+              "Neues Album"
+              "PUT"
+              (GalleryR "")
+              (GalleryR "")
+              [whamlet|
+                <label for=addGalleryInput>Name des neuen Albums
+                <input #addGalleryInput type=text name=addGalleryInput>
+              |]
+              [whamlet|
+                <button type=button .btn .btn-default data-dismiss=modal>Schliessen
+                <button type=submit .btn .btn-primary onClick=addGallery($('#addGalleryInput').val())>Erstellen
+              |]
+          gname = T.pack . gallery_name
         layout comp ["galleries"] $ do
-        galleryCss
-        [whamlet|
-          <div .content>
-            <div .row>
-              $forall g <- galleries
-                <div .col-md-3>
-                  <div .galleryimg .thumbnail>
-                    <a href=@{GalleryR $ gname g}>
-                      $case gallery_images g
-                        $of []
-                        $of is
-                          <img src=@{ImageThumbR (gname g) (T.pack $ head is)} alt=#{gname g}>
-                          <div .caption>
-                            <h4>#{gname g}
-        |]
-  where
-    gname = T.pack . gallery_name
+          galleryCss
+          [whamlet|
+            <div .content>
+              <div .row>
+                ^{addGalleryDialog}
+                <div .col-sm-9>
+                  <div .panel .panel-success>
+                    <div .panel-heading>
+                      <h4 .panel-title>Fotoalben
+                    <div .panel-body>
+                      $forall g <- galleries
+                        <div .col-md-3>
+                          <div .galleryimg .thumbnail>
+                            <a href=@{GalleryR $ gname g}>
+                              $case gallery_images g
+                                $of []
+                                  <img src=@{FavR} alt="No images yet">
+                                $of is
+                                  <img src=@{ImageThumbR (gname g) (T.pack $ head is)} alt=#{gname g}>
+                              <div .caption>
+                                <h4>#{gname g}
+                <div .col-sm-3>
+                  ^{actionPanel}
+          |]
 
 getGalleryR :: T.Text -> Handler TypedContent
 getGalleryR gname = selectRep $
@@ -139,8 +169,12 @@ getGalleryR gname = selectRep $
               });
         |]
 
-postGalleryR :: T.Text -> Handler Html
-postGalleryR _ = undefined
+putGalleryR :: T.Text -> Handler ()
+putGalleryR gname = do
+  comp <- component
+  let repo = compRepository comp
+  eitherResult <- liftIO $ runEitherT $ gallery_create repo (T.unpack gname)
+  either (fail . show) (const $ sendResponseCreated $ GalleryR gname) eitherResult
 
 deleteGalleryR :: T.Text -> Handler Html
 deleteGalleryR _ = undefined
@@ -302,48 +336,5 @@ auditTrail' _ _ ("gallery" : name : _) = do
   |]
 auditTrail' _ _ _ = return ()
 
-galleryNavigation :: [T.Text] -> Widget
-galleryNavigation path = do
-  repo            <- compRepository <$> component'
-  eitherGalleries <- liftIO $ runEitherT $ list_galleries repo
-  case eitherGalleries of
-    Left ioe -> do
-      $logError $ T.pack $ show (map T.unpack path) ++ "/galleryNavigation: " ++ show (ioe :: IOException)
-      return ()
-    Right galleries -> case path of
-      ("galleries" : _)        -> mapM_ (renderGallery   Nothing)   galleries
-      ("gallery"   : self : _) -> mapM_ (renderGallery $ Just self) galleries
-      _                        -> return ()
-
-  where
-    renderGallery maybeSelf g = do
-      let gname = T.pack $ gallery_name g
-      case maybeSelf of
-        Just self | self == gname ->
-          [whamlet|
-              <li .expanded>
-                  <a href=@{GalleryR gname} title=#{gname}>#{gname}
-          |]
-        _ ->
-          [whamlet|
-              <li .collapsed>
-                  <a href=@{GalleryR gname} title=#{gname}>#{gname}
-          |]
-
 naviChildren :: [T.Text] -> Maybe Widget
-naviChildren path = Just $ do
-  repo            <- compRepository <$> component'
-  eitherGalleries <- liftIO $ runEitherT $ list_galleries repo
-  case eitherGalleries of
-    Left ioe -> do
-      $logError $ T.pack $ show (map T.unpack path) ++ "/galleryNavigation: " ++ show (ioe :: IOException)
-      return ()
-    Right galleries ->
-      [whamlet|
-        <ul .nav .nav-pills .nav-stacked>
-          $forall g <- galleries
-            <li role=presentation .active>
-              <a href=@{GalleryR $ gname g} title=#{gname g}>#{gname g}
-      |]
-  where
-    gname g = T.pack $ gallery_name g
+naviChildren _ = Nothing

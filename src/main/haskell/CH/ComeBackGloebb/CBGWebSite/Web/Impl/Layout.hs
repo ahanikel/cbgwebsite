@@ -178,10 +178,10 @@ actionDialog id title method url redirectUrl body footer = [whamlet|
             function #{id}(name) {
               var url = name ? "/" + name : ""
               \$.ajax(
-                { url: "@{url}" + url
+                { url: "@{url}".replace(/\/-$/, "") + url
                 , type: "#{method}"
                 , success: function(result) {
-                    window.location.assign("@{redirectUrl}" + url);
+                    window.location.assign("@{redirectUrl}".replace(/\/-$/, "") + url);
                   }
                 }
               );
@@ -237,7 +237,7 @@ redirectDialog id title url body footer = do
 panel :: T.Text -> Widget -> Widget
 panel title body = [whamlet|
   <div .panel-heading>
-    <h3 .panel-title>#{title}
+    <h4 .panel-title>#{title}
   <div .panel-body>
     ^{body}
 |]

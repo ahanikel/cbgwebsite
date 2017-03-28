@@ -76,7 +76,7 @@ mkYesodData "CBGWebSite" [parseRoutes|
     /members/list                     MemberListR           GET
     /members/list/edit/#T.Text        MemberR               GET POST
     /galleries                        GalleriesR            GET
-    /gallery/#T.Text                  GalleryR              GET POST DELETE
+    /gallery/#T.Text                  GalleryR              GET PUT DELETE
     /gallery/#T.Text/images           GalleryImagesR        GET
     /gallery/#T.Text/image/#T.Text    GalleryImageR         GET POST DELETE
     /image/orig/#T.Text/#T.Text       ImageR                GET
@@ -134,7 +134,7 @@ instance Yesod CBGWebSite where
     -- the galleries
     isAuthorized GalleriesR             False = isAuthorized MembersR False
 
-    isAuthorized (GalleryR _)           False = isAuthorized MembersR False
+    isAuthorized (GalleryR _)           w     = isAuthorized MemberListR w
 
     isAuthorized (GalleryImagesR _)     False = isAuthorized MembersR False
 
