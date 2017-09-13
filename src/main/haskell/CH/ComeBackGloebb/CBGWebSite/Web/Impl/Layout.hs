@@ -96,6 +96,12 @@ css = [cassius|
       padding: 5px
       p
         background-color: yellow
+  @media (min-width: 768px)
+    .pull-right-lg
+      float: right !important
+  @media (max-width: 767px)
+    .pull-right-lg
+      margin-bottom: 40px
 |]
 
 htmlHead pageContent = [hamlet|
@@ -148,7 +154,7 @@ loginWidget maybeAuthId' = do
   case maybeAuthId' of
     Just _ ->
       [whamlet|
-        <ul .nav .nav-pills .pull-right>
+        <ul .nav .nav-pills .navbar-nav .pull-right-lg>
           <li role=presentation .active>
             <a href=# .dropdown-toggle data-toggle=dropdown role=button aria-haspopup=true aria-expanded=false title="Mitglieder">
               Mitglieder
@@ -165,7 +171,7 @@ loginWidget maybeAuthId' = do
       |]
     Nothing ->
       [whamlet|
-        <ul .nav .nav-pills .pull-right>
+        <ul .nav .nav-pills .navbar-nav .pull-right-lg>
           <li role=presentation .active>
             <a href=@{AuthR LoginR} title="Mitglieder">Mitglieder
       |]
