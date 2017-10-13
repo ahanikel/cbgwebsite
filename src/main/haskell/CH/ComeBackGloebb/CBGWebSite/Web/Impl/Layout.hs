@@ -138,14 +138,14 @@ htmlBody trail mChildren pageContent = [hamlet|
       <div .row>
         $case mChildren
           $of Just children
-            <div #sidebar .col-md-2>
+            <div #sidebar .col-sm-3 .col-lg-2>
               ^{pageBody children}
-            <div #main-content .col-md-7>
+            <div #main-content .col-sm-6 .col-lg-7>
               ^{pageBody pageContent}
           $of Nothing
-            <div #main-content .col-md-9>
+            <div #main-content .col-sm-9>
               ^{pageBody pageContent}
-        <div .col-md-3>
+        <div .col-sm-3>
           <img #cbg-sticker .img-responsive src="/static/assets/images/gloebb-gross.png">
 |]
 
