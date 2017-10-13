@@ -152,6 +152,9 @@ instance Yesod CBGWebSite where
     isAuthorized (AssetR _)             w     = isAuthorized MemberListR w
     isAuthorized (AssetsR _)            False = isAuthorized MembersR False
 
+    -- statics
+    isAuthorized (StaticR _)            False = return Authorized
+
     -- everything else
     isAuthorized _                      _     = return $ Unauthorized ""
 
