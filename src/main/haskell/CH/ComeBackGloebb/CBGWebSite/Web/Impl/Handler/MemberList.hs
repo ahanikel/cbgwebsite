@@ -119,14 +119,14 @@ getMemberListR = selectRep $ do
           <th>E-Mail
         $forall member <- members
           <tr>
-            <td>#{memFirstname member}
-            <td>#{memName      member}
-            <td>#{memAddress   member}
-            <td>#{memLocality  member}
-            <td>#{memStatus    member}
-            <td>#{memPhone     member}
-            <td>#{memMobile    member}
-            <td>#{memEmail     member}
+            <td .firstname>#{memFirstname member}
+            <td .lastname >#{memName      member}
+            <td .address  >#{memAddress   member}
+            <td .locality >#{memLocality  member}
+            <td .status   >#{memStatus    member}
+            <td .phone    >#{memPhone     member}
+            <td .mobile   >#{memMobile    member}
+            <td .email    >#{memEmail     member}
             <td>
               <a href=@{MemberR $ memberId member}>
                 <button>Edit

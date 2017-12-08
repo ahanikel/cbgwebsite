@@ -85,6 +85,8 @@ css = [cassius|
   #cbg-sticker
     width: 300px
     padding: 20px
+    z-index: -1
+    position: relative
   #calendar
     .day
       height: 100px
@@ -102,6 +104,10 @@ css = [cassius|
   @media (max-width: 767px)
     .pull-right-lg
       margin-bottom: 40px
+  td
+    padding-right: 1em
+  td.phone, td.mobile
+      white-space: nowrap
 |]
 
 htmlHead pageContent = [hamlet|
@@ -140,12 +146,12 @@ htmlBody trail mChildren pageContent = [hamlet|
           $of Just children
             <div #sidebar .col-sm-3 .col-lg-2>
               ^{pageBody children}
-            <div #main-content .col-sm-6 .col-lg-7>
+            <div #main-content .col-sm-9 .col-lg-7>
               ^{pageBody pageContent}
           $of Nothing
-            <div #main-content .col-sm-9>
+            <div #main-content .col-sm-12 .col-lg-9>
               ^{pageBody pageContent}
-        <div .col-sm-3>
+        <div .col-sm-0 .col-lg-3>
           <img #cbg-sticker .img-responsive src="/static/assets/images/gloebb-gross.png">
 |]
 
