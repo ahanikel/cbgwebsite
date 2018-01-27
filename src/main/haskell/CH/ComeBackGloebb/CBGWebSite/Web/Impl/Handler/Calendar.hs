@@ -81,8 +81,7 @@ getMemberCalendarMR year month = do
                   <div .panel-body>
                     <form #event-form .form-horizontal>
                       <div #evUUID-field .form-group>
-                        <label #evUUID-label for=evUUID-input>UUID
-                        <input #evUUID-input .form-control type=text name=evUUID ng-model=current.evUUID>
+                        <input #evUUID-input .form-control type=hidden name=evUUID ng-model=current.evUUID>
                       <div #evTitle-field .form-group>
                         <label #evTitle-label for=evTitle-input>Titel
                         <input #evTitle-input .form-control type=text name=evTitle ng-model=current.evTitle>
@@ -110,6 +109,12 @@ getMemberCalendarMR year month = do
                     <a ng-click=deleteEvent() role=button .btn .btn-primary .btn-sm style="margin-bottom: 5px">Eintrag löschen
           |]
           toWidget [julius|
+            $.datepicker.setDefaults(
+            { "dateFormat": "yy-mm-dd'T:00:00:00'"
+            , "showButtonPanel": false
+            });
+            $('#evStartDate-input').datepicker();
+            $('#evEndDate-input').datepicker();
             angular.module('calendarApp', [])
             .controller('CalendarController', function ($http, $scope) {
               var self = this;

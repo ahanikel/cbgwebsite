@@ -98,6 +98,8 @@ css = [cassius|
       padding: 5px
       p
         background-color: yellow
+  #event-form
+    margin: 10px
   @media (min-width: 768px)
     .pull-right-lg
       float: right !important
@@ -125,14 +127,17 @@ htmlHead pageContent = [hamlet|
       <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js">
       <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js">
     <![endif]-->
+    <link rel=stylesheet href=@{StaticR jquery_ui_css}>
     <script src=@{StaticR jquery_js}>
+    <script src=@{StaticR jquery_ui_js}>
     <script src=@{StaticR bootstrap_js}>
     <script src=@{StaticR ie10_viewport_bug_workaround_js}>
     <script src=@{StaticR angular_min_js}>
     ^{pageHead pageContent}
 |]
 
-htmlBody trail mChildren pageContent = [hamlet|
+htmlBody trail mChildren pageContent =
+  [hamlet|
     <div .container-fluid>
       <div .header .clearfix>
         <nav .navbar>
@@ -153,7 +158,7 @@ htmlBody trail mChildren pageContent = [hamlet|
               ^{pageBody pageContent}
         <div .col-sm-0 .col-lg-3>
           <img #cbg-sticker .img-responsive src="/static/assets/images/gloebb-gross.png">
-|]
+  |]
 
 loginWidget :: Maybe (AuthId CBGWebSite) -> Widget
 loginWidget maybeAuthId' = do
