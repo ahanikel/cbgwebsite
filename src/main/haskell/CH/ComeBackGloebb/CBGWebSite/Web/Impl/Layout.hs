@@ -128,8 +128,10 @@ htmlHead pageContent = [hamlet|
       <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js">
     <![endif]-->
     <link rel=stylesheet href=@{StaticR jquery_ui_css}>
+    <link rel=stylesheet href=@{StaticR jquery_ui_timepicker_addon_css}>
     <script src=@{StaticR jquery_js}>
     <script src=@{StaticR jquery_ui_js}>
+    <script src=@{StaticR jquery_ui_timepicker_addon_js}>
     <script src=@{StaticR bootstrap_js}>
     <script src=@{StaticR ie10_viewport_bug_workaround_js}>
     <script src=@{StaticR angular_min_js}>

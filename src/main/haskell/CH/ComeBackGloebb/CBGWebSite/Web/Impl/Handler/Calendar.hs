@@ -110,11 +110,15 @@ getMemberCalendarMR year month = do
           |]
           toWidget [julius|
             $.datepicker.setDefaults(
-            { "dateFormat": "yy-mm-dd'T:00:00:00'"
+            { "dateFormat": "yy-mm-dd'T'"
             , "showButtonPanel": false
             });
-            $('#evStartDate-input').datepicker();
-            $('#evEndDate-input').datepicker();
+            $.timepicker.setDefaults(
+            { "timeFormat": "HH:mm:'00'"
+            , "separator": ""
+            });
+            $('#evStartDate-input').datetimepicker();
+            $('#evEndDate-input').datetimepicker();
             angular.module('calendarApp', [])
             .controller('CalendarController', function ($http, $scope) {
               var self = this;
