@@ -177,28 +177,32 @@ getMemberCalendarMR year month = do
                 if ($scope.current.evUUID == "") {
                   $scope.current.evUUID = "00000000-0000-0000-0000-000000000000";
                 }
-                $http.post(url.substring(0, url.length - 1) + $scope.current.evUUID, $scope.current);
-                if ($scope.current.evUUID == "00000000-0000-0000-0000-000000000000") {
-                  $http.get('@{MemberCalendarListR}')
-                  .then(function (response) {
-                    $scope.events = response.data;
-                    eventClear();
-                    eventHide();
-                  });
-                }
-                eventView();
+                $http.post(url.substring(0, url.length - 1) + $scope.current.evUUID, $scope.current)
+                .then(function(response) {
+                  if ($scope.current.evUUID == "00000000-0000-0000-0000-000000000000") {
+                    $http.get('@{MemberCalendarMR year month}')
+                    .then(function (response) {
+                      $scope.events = response.data;
+                      eventClear();
+                    });
+                  }
+                  eventView();
+                });
               };
               $scope.newEvent = function() {
                 eventClear();
+                eventView();
                 eventEdit();
               };
               $scope.deleteEvent = function() {
-                $http.delete(url.substring(0, url.length - 1) + $scope.current.evUUID);
-                $http.get('@{MemberCalendarListR}')
-                .then(function (response) {
-                  $scope.events = response.data;
-                  eventClear();
-                  eventHide();
+                $http.delete(url.substring(0, url.length - 1) + $scope.current.evUUID)
+                .then(function(response) {
+                  $http.get('@{MemberCalendarMR year month}')
+                  .then(function (response) {
+                    $scope.events = response.data;
+                    eventClear();
+                    eventView();
+                  });
                 });
               };
               $scope.setCurrent = function(event) {
