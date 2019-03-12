@@ -80,8 +80,12 @@ instance Persistent Gallery where
 
 instance Persistent Image where
 
-  -- TODO: write the properties
-  writeItem i = writeNode $ toNode i
+  writeItem i = do
+    let n = toNode i
+    writeNode n
+    writeProperty n "type"         (U8.fromString $ image_type i)
+    writeProperty n "uploadedBy"   (U8.fromString $ image_uploadedBy i)
+    writeProperty n "uploadedDate" (U8.fromString $ toSqlString $ image_uploadedDate i)
 
   readItem repo path = do
     inode        <- getNode repo (urlFromString path)
