@@ -59,7 +59,6 @@ getMembersR = rootLayout ["members"] [whamlet|
       <li>Es gibt einen Kalender, in den man Termine eintragen kann.
   <p>(vorläufige) Nachteile:
     <ul>
-      <li>Der Kalender funktioniert noch seehr holprig.
       <li>Allgemein sehen einige Sachen noch etwas "unfertig" aus.
       <li>Eventuell habe ich noch etwas vergessen, was auf der alten Homepage drauf war?
   <p>Die Negativpunkte sollten nach und nach behoben werden. Fehlermeldungen, Wünsche und Anregungen sind willkommen!

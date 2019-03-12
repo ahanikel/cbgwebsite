@@ -178,6 +178,7 @@ loginWidget maybeAuthId' = do
                 <a href=@{GalleriesR}>Fotos
                 <a href=@{AssetsR $ ContentPath []}>Dateien
                 <a href=@{MemberCalendarR}>Kalender
+                <a href=@{MemberCalendarListR}>Termine
                 <a href=@{MemberListR}>Mitgliederliste
           <li role=presentation .active>
             <a href=@{AuthR LogoutR} title="Abmelden">Abmelden
