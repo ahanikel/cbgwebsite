@@ -328,6 +328,8 @@ auditTrail ("gallery" : name : _) = do
         <a href=@{GalleryR name}>#{name}
   |]
 
+auditTrail ("upload" : "image" : _) = return ()
+
 auditTrail' :: Repository -> String -> [T.Text] -> Widget
 auditTrail' _ _ ("gallery" : name : _) = do
   [whamlet|
