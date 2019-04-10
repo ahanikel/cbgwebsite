@@ -150,21 +150,27 @@ getGalleryR gname = selectRep $
               <div .galleryimg .new>
                 <input #fileinput type=file multiple=multiple accept="image/*">
           <script>
-              function uploadFile(file) {
+              function uploadFile(t, file) {
+                  t.fileCount = t.fileCount + 1;
                   var xhr = new XMLHttpRequest();
                   var fd  = new FormData();
                   xhr.open('POST', '@{UploadImageR gname}', true);
                   xhr.onreadystatechange = function() {
                       if (xhr.readyState == 4 && xhr.status == 200) {
+                          t.fileCount = t.fileCount - 1;
                           console.log("upload successful: " + xhr.responseText);
+                          if (t.fileCount == 0) {
+                              window.location.reload();
+                          }
                       }
                   };
                   fd.append('upload_file', file);
                   xhr.send(fd);
               }
               document.querySelector('#fileinput').addEventListener('change', function() {
+                  this.fileCount = 0;
                   for (var i = 0; i < this.files.length; ++i) {
-                      uploadFile(this.files[i]);
+                      uploadFile(this, this.files[i]);
                   }
               });
         |]
