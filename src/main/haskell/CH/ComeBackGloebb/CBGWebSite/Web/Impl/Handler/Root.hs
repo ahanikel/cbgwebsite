@@ -41,7 +41,7 @@ component = do
     Just c  -> return c
 
 getRootR :: Handler ()
-getRootR = redirect ("/content" :: String)
+getRootR = redirect ("https://comebackgloebb.ch/content/" :: String)
 
 getFavR :: Handler ()
 getFavR = sendFile "image/png" "src/main/haskell/CH/ComeBackGloebb/CBGWebSite/Web/static/cbg-favicon.png"
