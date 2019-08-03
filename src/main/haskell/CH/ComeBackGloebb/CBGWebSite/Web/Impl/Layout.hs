@@ -151,15 +151,17 @@ htmlBody trail mChildren pageContent =
       <div .row>
         $case mChildren
           $of Just children
-            <div #sidebar .col-sm-3 .col-lg-2>
+            <div #sidebar .col-sm-3 .col-md-3 .col-lg-2>
               ^{pageBody children}
-            <div #main-content .col-sm-9 .col-lg-7>
+            <div #main-content .col-sm-9 .col-md-9 .col-lg-7>
               ^{pageBody pageContent}
           $of Nothing
-            <div #main-content .col-sm-12 .col-lg-9>
+            <div #main-content .col-sm-12 .col-md-12 .col-lg-9>
               ^{pageBody pageContent}
-        <div .col-sm-0 .col-lg-3>
-          <img #cbg-sticker .img-responsive src="/static/assets/images/gloebb-gross.png">
+        <div .col-sm-12 .col-md-12 .col-lg-3>
+          <div .col-sm-3 .col-md-3 .col-lg-0>
+          <div .col-sm-9 .col-md-9 .col-lg-12>
+            <img #cbg-sticker .img-responsive src="/static/assets/images/gloebb-gross.png">
   |]
 
 loginWidget :: Maybe (AuthId CBGWebSite) -> Widget
