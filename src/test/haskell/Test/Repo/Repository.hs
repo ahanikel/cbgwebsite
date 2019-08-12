@@ -20,7 +20,7 @@ testRepository = withRepo $ \repo -> do
     describe "Repository" $ do
       it "write node" $ do
         let node = Node "testnode" [] [] repo
-        res <- runEitherT $ writeNode node
+        res <- runExceptT $ writeNode node
         res `shouldBe` Right ()
       it "write property" $ do
         let node = Node "testnode" [] [] repo

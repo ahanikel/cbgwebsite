@@ -6,7 +6,7 @@ module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Event (Event(..), newEvent, getEv
 
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import           Control.Monad                                     (liftM)
-import           Control.Monad.Trans.Either                        (runEitherT)
+import           Control.Monad.Except                              (runExceptT)
 import           Data.Aeson                                        (ToJSON (..),
                                                                     object,
                                                                     (.=),
@@ -135,16 +135,16 @@ testWriteEvent = do
   let repo = Repository "data/calendar"
       startDate = fromMaybe startOfTime $ fromSqlString "2017-01-20T22:53:55"
   ev <- newEvent repo "Test Event" startDate Nothing "Just a little test." "at home"
-  runEitherT $ writeItem ev
+  runExceptT $ writeItem ev
 
 testReadEvent = do
   let repo = Repository "data/calendar"
-  liftM (either (const []) id) $ runEitherT $ getEventsForMonth repo 2017 1
+  liftM (either (const []) id) $ runExceptT $ getEventsForMonth repo 2017 1
 
 testChangeEvent = do
   (event : _) <- testReadEvent
   now <- getCurrentTime
   let changedEvent = event { evStartDate = now }
-  runEitherT $ do
+  runExceptT $ do
     deleteItem event
     writeItem changedEvent

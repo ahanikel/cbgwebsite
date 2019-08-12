@@ -26,7 +26,7 @@ import Text.Hamlet
 
 -- other imports
 import           Control.Monad                                      (liftM)
-import           Control.Monad.Trans.Either                         (runEitherT)
+import           Control.Monad.Except                               (runExceptT)
 import qualified Data.ByteString.UTF8                               as U8
 import           Data.List                                          (find, sort, sortBy)
 import           Data.Maybe                                         (fromMaybe)
@@ -55,13 +55,13 @@ getContentR :: ContentPath -> Handler Html
 getContentR (ContentPath pieces) = do
   repo <- compRepository <$> component
   contentLayout ("content" : pieces) $ do
-    eitherNode <- liftIO $ runEitherT $ do
+    eitherNode <- liftIO $ runExceptT $ do
         let url = map T.unpack pieces
         getNode repo url
     case eitherNode of
         Left _ -> notFound
         Right node -> do
-          res <- liftIO $ runEitherT $ liftM U8.toString $ getProperty node "text.html"
+          res <- liftIO $ runExceptT $ liftM U8.toString $ getProperty node "text.html"
           prop <- either (fail.show) return res
           toWidget $ preEscapedToMarkup prop
 
@@ -69,7 +69,7 @@ getEditContentR :: ContentPath -> Handler Html
 getEditContentR (ContentPath pieces) = do
     let url = map T.unpack pieces
     repo <- compRepository <$> component
-    eitherNode <- liftIO $ runEitherT $ getNode repo url
+    eitherNode <- liftIO $ runExceptT $ getNode repo url
     case eitherNode of
         Left _ -> case url of
           [] -> notFound
@@ -80,7 +80,7 @@ getEditContentR (ContentPath pieces) = do
               (toWidget $ toHtml T.empty)
         Right node -> do
           let propNames   = node_props node
-          res            <- liftIO $ runEitherT $ mapM (getProperty node) (trace (show propNames) propNames)
+          res            <- liftIO $ runExceptT $ mapM (getProperty node) (trace (show propNames) propNames)
           propValues     <- either (fail . show) (mapM (return . U8.toString)) res
           let props       = zip propNames propValues :: [(String, String)]
               textHtml    = snd <$> find ((== "text.html") . fst) props
@@ -121,19 +121,19 @@ postEditContentR :: ContentPath -> Handler Html
 postEditContentR (ContentPath pieces) = do
     let url = map T.unpack pieces
     repo <- compRepository <$> component
-    eitherNode <- liftIO $ runEitherT $ getNode repo url
+    eitherNode <- liftIO $ runExceptT $ getNode repo url
     node <- case eitherNode of
         Left _ -> case url of
           [] -> notFound
           _  -> do
             let name = last url
                 node = Node name url [] repo
-            _ <- liftIO $ runEitherT $ writeNode node
+            _ <- liftIO $ runExceptT $ writeNode node
             return node
         Right node -> return node
     pagebody <- runInputPost $ ireq textField "body"
     reqbody <- filter ((/= "body") . fst) <$> fst <$> runRequestBody
-    res <- liftIO $ runEitherT $ do
+    res <- liftIO $ runExceptT $ do
       writeProperty node "text.html" (U8.fromString $ T.unpack pagebody)
       mapM_ (\(pname, pvalue) -> writeProperty node (T.unpack pname) (U8.fromString $ T.unpack pvalue)) $ makePairs reqbody
     case res of
@@ -150,7 +150,7 @@ deleteEditContentR :: ContentPath -> Handler ()
 deleteEditContentR (ContentPath pieces) = do
     let url = map T.unpack pieces
     repo <- compRepository <$> component
-    eitherRes <- liftIO $ runEitherT $ do
+    eitherRes <- liftIO $ runExceptT $ do
       getNode repo url >>= deleteNode
     case eitherRes of
       Left _ -> notFound
@@ -299,7 +299,7 @@ contentNavigation path = do
           ("content" : rest)          -> (getContentUrlFromURL, rest)
           ("edit" : "content" : rest) -> (getEditContentUrlFromURL, rest)
           _                           -> fail "no content node"
-  eitherNodes <- liftIO $ runEitherT $ getNavigation repo (urlFromStrings repoPath) 1
+  eitherNodes <- liftIO $ runExceptT $ getNavigation repo (urlFromStrings repoPath) 1
   case eitherNodes of
     Left _ ->
       return ()
@@ -379,7 +379,7 @@ url linkFunc = linkFunc . ContentPath . (map T.pack) . neURL
 
 getTrail' :: Repository -> [T.Text] -> WidgetT CBGWebSite IO [Navigation NavigationEntry]
 getTrail' repo path = do
-  eitherNodes <- liftIO $ runEitherT $ do
+  eitherNodes <- liftIO $ runExceptT $ do
     node <- getNode repo (map T.unpack path)
     getTrail node
   return $ either (const []) id eitherNodes

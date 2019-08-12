@@ -6,7 +6,7 @@ module CH.ComeBackGloebb.CBGWebSite.Model.Impl.Navigation (getNavigation, Naviga
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Repository
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
 import           Control.Monad                                     (liftM)
-import           Control.Monad.Trans.Either                        (runEitherT)
+import           Control.Monad.Except                              (runExceptT)
 import qualified Data.ByteString.UTF8                              as U8
 import           Data.Foldable
 import           Data.Traversable
@@ -65,12 +65,12 @@ navigationFromNode subLevels self = do
 
 getTitleOrNodeName :: Node -> IO String
 getTitleOrNodeName n = do
-  eprop <- runEitherT $ liftM U8.toString $ getProperty n "title"
+  eprop <- runExceptT $ liftM U8.toString $ getProperty n "title"
   return $ either (const $ node_name n) id eprop
 
 getRankOrZero :: Node -> IO Int
 getRankOrZero n = do
-  eprop <- runEitherT $ liftM ((read :: String -> Int) . U8.toString) $ getProperty n "rank"
+  eprop <- runExceptT $ liftM ((read :: String -> Int) . U8.toString) $ getProperty n "rank"
   return $ either (const 0) id eprop
 
 -- exported

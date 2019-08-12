@@ -30,7 +30,7 @@ import Network.Wai                                                  (strictReque
 
 -- other imports
 import           Control.Monad                                      (liftM)
-import           Control.Monad.Trans.Either                         (runEitherT)
+import           Control.Monad.Except                               (runExceptT)
 import           Data.Aeson                                         (eitherDecode, encode)
 import           Data.DateTime
 import           Data.Either                                        (either)
@@ -217,7 +217,7 @@ getMemberCalendarMR year month = do
 
   where getEvents :: Repository -> Handler [Event]
         getEvents repo = do
-              eitherEvents <- liftIO $ runEitherT $ getEventsForMonth repo year month
+              eitherEvents <- liftIO $ runExceptT $ getEventsForMonth repo year month
               case eitherEvents of
                   Left  e      -> do $logError $ T.pack $ show e
                                      return ([] :: [Event])
@@ -264,7 +264,7 @@ getEventR name = do
   let repo = compRepository comp
   let name' = T.unpack name
   let uuid = read name'
-  eitherEvent <- liftIO $ runEitherT $ readItem repo name'
+  eitherEvent <- liftIO $ runExceptT $ readItem repo name'
   let mevent =  either (\e -> trace (show e) Nothing)
                        Just
                        eitherEvent
@@ -290,7 +290,7 @@ postEventR name = do
       case result of
         FormSuccess event -> do 
           -- this should actually be removeItem (old path) >> writeItem (new path)
-          result' <- liftIO $ runEitherT $ writeItem event
+          result' <- liftIO $ runExceptT $ writeItem event
           case result' of
             Left e ->
               return $ trace (show e) ()
@@ -312,7 +312,7 @@ postEventR name = do
       ev' <- if U.null evUUID
              then liftIO $ newEvent repo evTitle evStartDate evEndDate evDescription evLocation
              else return ev { evRepo = repo }
-      res <- liftIO $ runEitherT $ writeItem ev'
+      res <- liftIO $ runExceptT $ writeItem ev'
       either (fail . show) returnJson res
 
 deleteEventR :: T.Text -> Handler TypedContent
@@ -323,7 +323,7 @@ deleteEventR name = do
   let uuid = read name' :: U.UUID
   selectRep $ do
     provideRep $ do
-      res <- liftIO $ runEitherT $ do
+      res <- liftIO $ runExceptT $ do
         ev <- readItem repo (show uuid) :: RepositoryContext Event
         deleteItem ev
       either (fail . show) returnJson res
@@ -512,7 +512,7 @@ getMemberCalendarListR = do
     provideRep $ returnJson events
   where getEvents :: Repository -> Handler [Event]
         getEvents repo = do
-              eitherEvents <- liftIO $ runEitherT $ getAllEvents repo
+              eitherEvents <- liftIO $ runExceptT $ getAllEvents repo
               case eitherEvents of
                   Left  e      -> do $logError $ T.pack $ show e
                                      return ([] :: [Event])

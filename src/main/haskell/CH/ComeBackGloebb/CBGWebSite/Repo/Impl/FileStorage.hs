@@ -14,7 +14,7 @@ import           CH.ComeBackGloebb.CBGWebSite.Repo.Types
 
 import           Control.Exception                            (throwIO)
 import           Control.Monad                                (filterM, when)
-import           Control.Monad.Trans.Either                   (left, runEitherT)
+import           Control.Monad.Except                         (runExceptT)
 import           Control.Monad.Writer                         (Writer,
                                                                runWriter, tell)
 import           Data.Hash.MD5                                (Str (..), md5s)
@@ -60,10 +60,10 @@ propPathPath path = '/' : a : b : '/' : c : d : '/' : e : f : '/' : hash
 data FakeRepository = FakeRepository
 
 instance Repository FakeRepository TransactionContext where
-    r_getTransaction _              = left $ userError "r_getTransaction not implemented"
-    r_logBegin       _    _         = left $ userError "r_logBegin not implemented"
-    r_logEnd         _    _         = left $ userError "r_logEnd not implemented"
-    r_getNode        _    _         = left $ userError "r_getNode not implemented"
+    r_getTransaction _              = fail "r_getTransaction not implemented"
+    r_logBegin       _    _         = fail "r_logBegin not implemented"
+    r_logEnd         _    _         = fail "r_logEnd not implemented"
+    r_getNode        _    _         = fail "r_getNode not implemented"
     r_addNode        _    node      = tell [AddNode        node]
     r_removeNode     _    node      = tell [RemoveNode     node]
     r_addProperty    _    node prop = tell [AddProperty    node prop]
@@ -143,7 +143,7 @@ instance Repository FakeRepository (Writer [String]) where
     r_modifyProperty _    node prop = tell ["r_modifyProperty " ++ show node ++ " " ++ show prop]
 
 runTransaction :: Repository r m => r -> TransactionContext a -> m (Either IOError Transaction)
-runTransaction repo tc = runEitherT $ do trans <- r_getTransaction tc
+runTransaction repo tc = runExceptT $ do trans <- r_getTransaction tc
                                          r_logBegin repo trans
                                          mapM_ exec_op $ ta_ops trans
                                          r_logEnd   repo trans
@@ -155,7 +155,7 @@ runTransaction repo tc = runEitherT $ do trans <- r_getTransaction tc
                                   ModifyProperty node prop -> r_modifyProperty repo node prop
 
 doSomething :: TransactionContext ()
-doSomething = do _ <- runEitherT $ do --r_removeNode  FakeRepository node
+doSomething = do _ <- runExceptT $ do --r_removeNode  FakeRepository node
                                       r_addNode     FakeRepository node
                                       r_addProperty FakeRepository node property
                  return ()

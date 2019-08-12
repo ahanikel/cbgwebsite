@@ -27,7 +27,7 @@ import Text.Hamlet
 
 -- other imports
 import           Control.Monad                                      (liftM)
-import           Control.Monad.Trans.Either                         (runEitherT)
+import           Control.Monad.Except                               (runExceptT)
 import           Data.ByteString.Lazy                               (toStrict)
 import qualified Data.ByteString.UTF8                               as U8
 import           Data.Conduit
@@ -58,7 +58,7 @@ getAssetR :: ContentPath -> Handler ()
 getAssetR (ContentPath path) = do
   repo <- compRepository <$> component
   let filePath = intercalate "/" $ map T.unpack path
-  eitherAsset <- liftIO $ runEitherT $ assetRead repo filePath
+  eitherAsset <- liftIO $ runExceptT $ assetRead repo filePath
   case eitherAsset of
     Left e -> do
       $logError $ T.pack $ show e
@@ -80,7 +80,7 @@ postAssetR (ContentPath path) = do
                              _       -> fileName file
                type'     = fileContentType file
            bytes        <- runConduit $ fileSource file $$ CB.sinkLbs
-           eitherResult <- liftIO $ runEitherT $ do
+           eitherResult <- liftIO $ runExceptT $ do
              now <- liftIO getCurrentTime
              assetWrite repo (map T.unpack (path ++ [name])) (T.unpack name) (T.unpack type') (T.unpack userName) now (Just $ toStrict bytes)
            case eitherResult of
@@ -98,7 +98,7 @@ putAssetR (ContentPath path) = do
   let name = last path
       type' = "application/x-directory"
       userName = fromMaybe "anonymous" mauthUser
-  eitherResult <- liftIO $ runEitherT $ do
+  eitherResult <- liftIO $ runExceptT $ do
     now <- liftIO getCurrentTime
     assetWrite repo (map T.unpack path) (T.unpack name) (T.unpack type') (T.unpack userName) now Nothing
   case eitherResult of
@@ -110,7 +110,7 @@ putAssetR (ContentPath path) = do
 deleteAssetR :: ContentPath -> Handler ()
 deleteAssetR (ContentPath path) = do
   repo <- compRepository <$> component
-  eitherResult <- liftIO $ runEitherT $ do
+  eitherResult <- liftIO $ runExceptT $ do
     assetDelete repo (map T.unpack path)
   case eitherResult of
     Left e -> do
@@ -126,7 +126,7 @@ getAssetsR (ContentPath path) = do
           _  -> init path
   comp <- component
   let repo = compRepository comp
-  assets' <- liftIO $ runEitherT $ do
+  assets' <- liftIO $ runExceptT $ do
     let path'  = map T.unpack path
     thisAsset <- assetRead repo $ urlToString $ map T.unpack path
     assets    <- listAssets repo path'
@@ -268,7 +268,7 @@ url = AssetsR . ContentPath . (map T.pack) . neURL
 
 getTrail' :: Repository -> [T.Text] -> WidgetT CBGWebSite IO [Navigation NavigationEntry]
 getTrail' repo path = do
-  eitherNodes <- liftIO $ runEitherT $ do
+  eitherNodes <- liftIO $ runExceptT $ do
     node <- getNode repo (map T.unpack path)
     getTrail node
   return $ either (const []) id eitherNodes

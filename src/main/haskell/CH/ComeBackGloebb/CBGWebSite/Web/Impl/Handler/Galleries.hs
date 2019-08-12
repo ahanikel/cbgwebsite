@@ -26,7 +26,7 @@ import Text.Hamlet
 
 -- other imports
 import           Control.Exception                                  (IOException)
-import           Control.Monad.Trans.Either                         (runEitherT)
+import           Control.Monad.Except                               (runExceptT)
 import qualified Data.ByteString.UTF8                               as U8
 import           Data.ByteString.Lazy                               (toStrict)
 import           Data.Conduit
@@ -69,7 +69,7 @@ getGalleriesR = selectRep $
   provideRep $ do
     comp <- component
     let repo = compRepository comp
-    eitherGalleries <- liftIO $ runEitherT $ list_galleries repo
+    eitherGalleries <- liftIO $ runExceptT $ list_galleries repo
     case eitherGalleries of
       Left e -> do
         $logError $ T.pack $ show e
@@ -129,7 +129,7 @@ getGalleryR gname = selectRep $
   provideRep $ do
     comp <- component
     let repo = compRepository comp
-    eitherGallery <- liftIO $ runEitherT $ gallery_read repo (T.unpack gname)
+    eitherGallery <- liftIO $ runExceptT $ gallery_read repo (T.unpack gname)
     case eitherGallery of
       Left e -> do
         $logError $ T.pack $ show e
@@ -179,7 +179,7 @@ putGalleryR :: T.Text -> Handler ()
 putGalleryR gname = do
   comp <- component
   let repo = compRepository comp
-  eitherResult <- liftIO $ runEitherT $ gallery_create repo (T.unpack gname)
+  eitherResult <- liftIO $ runExceptT $ gallery_create repo (T.unpack gname)
   either (fail . show) (const $ sendResponseCreated $ GalleryR gname) eitherResult
 
 deleteGalleryR :: T.Text -> Handler Html
@@ -190,7 +190,7 @@ getGalleryImagesR gname = selectRep $
   provideRep $ do
     comp <- component
     let repo = compRepository comp
-    eitherGallery <- liftIO $ runEitherT $ gallery_read repo (T.unpack gname)
+    eitherGallery <- liftIO $ runExceptT $ gallery_read repo (T.unpack gname)
     case eitherGallery of
       Left e -> do
         $logError $ T.pack $ show e
@@ -212,7 +212,7 @@ getGalleryImageR gname iname = selectRep $
   provideRep $ do
     comp <- component
     let repo = compRepository comp
-    eitherGallery <- liftIO $ runEitherT $ gallery_read repo (T.unpack gname)
+    eitherGallery <- liftIO $ runExceptT $ gallery_read repo (T.unpack gname)
     case eitherGallery of
       Left e -> do
         $logError $ T.pack $ show e
@@ -254,7 +254,7 @@ deleteGalleryImageR _ _ = undefined
 getImageR :: T.Text -> T.Text -> Handler ()
 getImageR gname iname = do
     repo        <- compRepository <$> component
-    eitherImage <- liftIO $ runEitherT $ image_read repo (T.unpack gname) (T.unpack iname)
+    eitherImage <- liftIO $ runExceptT $ image_read repo (T.unpack gname) (T.unpack iname)
     case eitherImage of
         Left e -> do
             $logError $ T.pack $ show e
@@ -264,7 +264,7 @@ getImageR gname iname = do
 getImageSmallR :: T.Text -> T.Text -> Handler ()
 getImageSmallR gname iname = do
     repo        <- compRepository <$> component
-    eitherImage <- liftIO $ runEitherT $ image_read repo (T.unpack gname) (T.unpack iname)
+    eitherImage <- liftIO $ runExceptT $ image_read repo (T.unpack gname) (T.unpack iname)
     case eitherImage of
         Left e -> do
             $logError $ T.pack $ show e
@@ -274,7 +274,7 @@ getImageSmallR gname iname = do
 getImageThumbR :: T.Text -> T.Text -> Handler ()
 getImageThumbR gname iname = do
     repo        <- compRepository <$> component
-    eitherImage <- liftIO $ runEitherT $ image_read repo (T.unpack gname) (T.unpack iname)
+    eitherImage <- liftIO $ runExceptT $ image_read repo (T.unpack gname) (T.unpack iname)
     case eitherImage of
         Left e -> do
             $logError $ T.pack $ show e
@@ -296,7 +296,7 @@ postUploadImageR gname = do
                 type' = fileContentType file
             bytes <- runConduit $ fileSource file $$ CB.sinkLbs
             eitherResult <- liftIO $
-              runEitherT $ image_write repo
+              runExceptT $ image_write repo
                                        (T.unpack gname)
                                        (T.unpack iname)
                                        (T.unpack type')

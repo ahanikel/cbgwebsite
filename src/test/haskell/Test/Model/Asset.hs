@@ -6,7 +6,7 @@ import           CH.ComeBackGloebb.CBGWebSite.Repo.Repository  (Persistent (..),
                                                                 Repository (..),
                                                                 RepositoryContext,
                                                                 openRepository)
-import           Control.Monad.Trans.Either                    (runEitherT)
+import           Control.Monad.Except                          (runExceptT)
 import           System.Directory                              (removeDirectoryRecursive)
 import           System.IO.Temp                                (createTempDirectory)
 import           Test.Hspec
@@ -20,17 +20,17 @@ main = do
     describe "Asset" $ do
 
       it "create a test asset repository" $ do
-        result <- runEitherT $ createTestRepo repo
+        result <- runExceptT $ createTestRepo repo
         result `shouldBe` Right repo
 
       it "list assets of the repository" $ do
-        asset   <- runEitherT $ assetName . head <$> listAssets repo []
+        asset   <- runExceptT $ assetName . head <$> listAssets repo []
         asset   `shouldBe` Right "Verein"
 
-        asset'  <- runEitherT $ assetName . head <$> listAssets repo ["Verein"]
+        asset'  <- runExceptT $ assetName . head <$> listAssets repo ["Verein"]
         asset'  `shouldBe` Right "Statuten"
 
-        asset'' <- runEitherT $ assetName . head <$> listAssets repo ["Verein", "Statuten"]
+        asset'' <- runExceptT $ assetName . head <$> listAssets repo ["Verein", "Statuten"]
         asset'' `shouldBe` Right "Statuten.pdf"
 
   removeDirectoryRecursive tmpDir

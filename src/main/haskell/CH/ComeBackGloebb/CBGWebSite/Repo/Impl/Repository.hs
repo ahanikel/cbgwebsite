@@ -38,8 +38,7 @@ where
 
 import           CH.ComeBackGloebb.CBGWebSite.Repo.Impl.Utils
 import           Control.Monad                                (filterM, liftM)
-import           Control.Monad.Trans.Either                   (EitherT, left)
-import           Control.Monad.Trans.Either                   (runEitherT)
+import           Control.Monad.Except                         (ExceptT, runExceptT)
 import qualified Data.ByteString.Lazy                         as BL
 import qualified Data.ByteString                              as BS
 import           Data.List                                    (intercalate,
@@ -130,7 +129,7 @@ data Node = Node { node_name  :: String
     deriving (Read, Show, Eq)
 
 -- exported
-type RepositoryContext a = EitherT IOError IO a
+type RepositoryContext a = ExceptT IOError IO a
 
 readPropertyNames :: FilePath -> IO [String]
 readPropertyNames path = readFiles           >>=
@@ -150,7 +149,7 @@ getProperty node pname = check $ BS.readFile $ getPropertyPath node pname
 
 -- exported
 getPropertyWithDefault :: Node -> String -> BS.ByteString -> RepositoryContext BS.ByteString
-getPropertyWithDefault node pname def = do eProp <- check $ runEitherT $ getProperty node pname
+getPropertyWithDefault node pname def = do eProp <- check $ runExceptT $ getProperty node pname
                                            return $ either (const def) id eProp
 
 -- exported

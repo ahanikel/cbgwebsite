@@ -25,7 +25,7 @@ import Yesod.Auth
 import Text.Hamlet
 
 -- other imports
-import           Control.Monad.Trans.Either                         (runEitherT)
+import           Control.Monad.Except                               (runExceptT)
 import qualified Data.Text as T
 import           Data.List (find)
 import           Debug.Trace
@@ -70,7 +70,7 @@ getMemberR :: T.Text -> Handler Html
 getMemberR name = do
   comp         <- component
   let repo     =  compRepository comp
-  eitherMember <- liftIO $ runEitherT $ readItem repo (T.unpack name)
+  eitherMember <- liftIO $ runExceptT $ readItem repo (T.unpack name)
   let mmember  =  either (\e -> trace (show e) Nothing)
                   Just
                   eitherMember
@@ -89,7 +89,7 @@ postMemberR name = do
   ((result, widget), enctype) <- runFormPost $ memberForm repo Nothing
   case result of
     FormSuccess member -> do
-      result' <- liftIO $ runEitherT $ writeItem member
+      result' <- liftIO $ runExceptT $ writeItem member
       case result' of
         Left e -> return $ trace (show e) ()
         _      -> return ()
@@ -135,7 +135,7 @@ getMemberListR = selectRep $ do
   where renderMembers :: HasContentType a => ([Member] -> Handler a) -> Handler a
         renderMembers as = do
           repo          <- compRepository <$> component
-          eitherMembers <- liftIO $ runEitherT $ getMemberList repo
+          eitherMembers <- liftIO $ runExceptT $ getMemberList repo
           case eitherMembers of
             Left  e       -> do
               $logError $ T.pack $ show e
