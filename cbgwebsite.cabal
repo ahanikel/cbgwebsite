@@ -78,7 +78,6 @@ Library
                , warp-tls
                , yesod
                , yesod-auth
-               , yesod-auth-account-cbg
                , yesod-static
 
 test-suite CBGWebSite-test
