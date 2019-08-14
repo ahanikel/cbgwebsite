@@ -134,7 +134,8 @@ instance Yesod CBGWebSite where
     -- the galleries
     isAuthorized GalleriesR             False = isAuthorized MembersR False
 
-    isAuthorized (GalleryR _)           w     = isAuthorized MemberListR w
+    isAuthorized (GalleryR _)           False = isAuthorized MembersR False
+    isAuthorized (GalleryR _)           True  = isAuthorized MemberListR True
 
     isAuthorized (GalleryImagesR _)     False = isAuthorized MembersR False
 
@@ -149,7 +150,8 @@ instance Yesod CBGWebSite where
     isAuthorized (UploadImageR _)       True  = isAuthorized MembersR False
 
     -- the assets
-    isAuthorized (AssetR _)             w     = isAuthorized MemberListR w
+    isAuthorized (AssetR _)             False = isAuthorized MembersR False
+    isAuthorized (AssetR _)             True  = isAuthorized MemberListR True
     isAuthorized (AssetsR _)            False = isAuthorized MembersR False
 
     -- statics
