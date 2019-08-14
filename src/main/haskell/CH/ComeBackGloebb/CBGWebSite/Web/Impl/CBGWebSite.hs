@@ -32,7 +32,7 @@ import Database.Persist.Sqlite (ConnectionPool, withSqlitePool, runSqlPool, runM
 import Control.Monad.Logger (runStderrLoggingT)
 import Network.HTTP.Types (status302)
 import Network.Wai (isSecure, rawPathInfo, responseLBS)
-import Network.Wai.Handler.Warp (defaultSettings, setPort)
+import Network.Wai.Handler.Warp (defaultSettings, setPort, setHTTP2Disabled)
 import Network.Wai.Handler.WarpTLS (OnInsecure(..), onInsecure, runTLS, tlsSettings)
 
 -- other imports
@@ -85,7 +85,7 @@ mkFoundation dbPool = do
 
 cbgWebSite :: IO ()
 cbgWebSite = do
-  let warpSettings = setPort 8080 defaultSettings
+  let warpSettings = setPort 8080 (setHTTP2Disabled defaultSettings)
       warpTlsSettings = (tlsSettings "server.crt" "server.key")
                         { onInsecure = AllowInsecure }
   runStderrLoggingT $
